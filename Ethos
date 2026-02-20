@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>EthosGuard — AI Ethical Risk Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* ══════════════ RESET & TOKENS ══════════════ */
+:root {
+  --bg:        #070B14;
+  --bg2:       #0C1220;
+  --bg3:       #101828;
+  --panel:     #111929;
+  --panel2:    #162035;
+  --border:    rgba(255,255,255,0.06);
+  --border2:   rgba(255,255,255,0.11);
+  --txt:       #D8E2F0;
+  --txt2:      #7A8CAA;
+  --txt3:      #3D4F68;
+  --accent:    #3B8EEA;
+  --green:     #10B981;
+  --amber:     #F59E0B;
+  --orange:    #F97316;
+  --red:       #EF4444;
+  --critical:  #FF2D55;
+  --purple:    #8B5CF6;
+  --teal:      #14B8A6;
+  --font-ui:   'Barlow', sans-serif;
+  --font-cond: 'Barlow Condensed', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--txt);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ══════════════ TYPOGRAPHY ══════════════ */
+.label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--txt3); }
+.label-sm { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--txt3); }
+.num-xl { font-family: var(--font-cond); font-size: 38px; font-weight: 700; line-height: 1; }
+.num-lg { font-family: var(--font-cond); font-size: 26px; font-weight: 700; line-height: 1; }
+.num-md { font-family: var(--font-cond); font-size: 20px; font-weight: 600; line-height: 1; }
+.mono { font-family: var(--font-mono); font-size: 11px; }
+
+/* ══════════════ LAYOUT ══════════════ */
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* TOPBAR */
+#topbar {
+  height: 52px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 50;
+}
+.logo-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 20px rgba(59,142,234,0.3);
+  flex-shrink: 0;
+}
+.logo-text {
+  font-family: var(--font-cond);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.logo-text span { color: var(--accent); }
+.logo-sub { font-family: var(--font-mono); font-size: 9px; color: var(--txt3); letter-spacing: 2px; }
+.topbar-sep { width: 1px; height: 24px; background: var(--border2); }
+.sys-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--txt2);
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); animation: statusPulse 2s infinite; }
+.status-dot.warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: statusPulse 1s infinite; }
+.status-dot.crit { background: var(--critical); box-shadow: 0 0 10px var(--critical); animation: statusPulse 0.5s infinite; }
+
+@keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.tbtn {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 7px;
+  padding: 6px 14px;
+  color: var(--txt2);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  display: flex; align-items: center; gap: 6px;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tbtn:hover { border-color: var(--accent); color: var(--txt); }
+.tbtn.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.tbtn.primary:hover { opacity: 0.85; }
+.tbtn.danger { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: var(--red); }
+.tbtn.warning { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: var(--amber); }
+
+/* MODEL TOGGLE */
+.model-toggle {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.model-opt {
+  padding: 5px 14px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  font-family: var(--font-ui);
+}
+.model-opt.healthy.active { background: rgba(16,185,129,0.2); color: var(--green); }
+.model-opt.compromised.active { background: rgba(239,68,68,0.2); color: var(--red); animation: flashActive 1s ease; }
+.model-opt:not(.active) { color: var(--txt3); }
+@keyframes flashActive { from{opacity:0.5} to{opacity:1} }
+
+/* BODY SPLIT */
+#body-wrap {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* SIDEBAR */
+#sidebar {
+  width: 200px;
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+.nav-section { padding: 16px 12px 6px; }
+.nav-section-label { font-family: var(--font-mono); font-size: 9px; color: var(--txt3); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; padding: 0 4px; }
+.nav-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--txt2);
+  transition: all 0.15s;
+  margin-bottom: 1px;
+}
+.nav-item:hover { background: var(--panel); color: var(--txt); }
+.nav-item.active { background: rgba(59,142,234,0.12); color: var(--accent); }
+.nav-item .icon { width: 18px; text-align: center; font-size: 14px; }
+.nav-badge {
+  margin-left: auto;
+  background: var(--red);
+  color: #fff;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  text-align: center;
+}
+.sidebar-bottom { margin-top: auto; padding: 12px; border-top: 1px solid var(--border); }
+.api-status { font-family: var(--font-mono); font-size: 10px; color: var(--txt3); display: flex; flex-direction: column; gap: 6px; }
+.api-key-btn {
+  width: 100%;
+  background: var(--panel);
+  border: 1px dashed var(--border2);
+  border-radius: 6px;
+  padding: 7px;
+  color: var(--txt2);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+  font-family: var(--font-ui);
+}
+.api-key-btn:hover { border-color: var(--accent); color: var(--accent); }
+.api-key-btn.connected { border-color: rgba(16,185,129,0.4); color: var(--green); background: rgba(16,185,129,0.08); }
+
+/* MAIN */
+#main { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+/* ══════════════ PANEL CARDS ══════════════ */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-title { font-family: var(--font-cond); font-size: 13px; font-weight: 600; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+.panel-body { padding: 14px 16px; }
+
+/* ══════════════ KPI CARDS ══════════════ */
+.kpi-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.kpi-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--kpi-color, var(--accent));
+  opacity: 0.8;
+}
+.kpi-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--txt3); margin-bottom: 6px; }
+.kpi-value { font-family: var(--font-cond); font-size: 28px; font-weight: 700; line-height: 1; color: var(--kpi-color, var(--txt)); transition: color 0.5s; }
+.kpi-delta {
+  display: flex; align-items: center; gap: 3px;
+  font-family: var(--font-mono); font-size: 10px;
+  margin-top: 5px;
+}
+.kpi-bar { height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.kpi-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(0.34,1.56,0.64,1); background: var(--kpi-color, var(--accent)); }
+.kpi-icon { position: absolute; top: 10px; right: 12px; font-size: 18px; opacity: 0.15; }
+
+/* ══════════════ RISK ROW ══════════════ */
+.risk-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ══════════════ SEVERITY BADGES ══════════════ */
+.sev {
+  display: inline-flex; align-items: center; gap: 4px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.sev-low    { background: rgba(16,185,129,0.12); color: var(--green); border: 1px solid rgba(16,185,129,0.25); }
+.sev-medium { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+.sev-high   { background: rgba(249,115,22,0.12); color: var(--orange); border: 1px solid rgba(249,115,22,0.25); }
+.sev-critical{ background: rgba(255,45,85,0.15); color: var(--critical); border: 1px solid rgba(255,45,85,0.3); animation: criticalPulse 1.5s infinite; }
+@keyframes criticalPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,45,85,0.3)} 50%{box-shadow:0 0 0 4px rgba(255,45,85,0)} }
+
+/* ══════════════ BIAS HEATMAP ══════════════ */
+.heatmap-grid { display: grid; gap: 3px; }
+.hm-cell {
+  height: 38px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.5s;
+  position: relative;
+  overflow: hidden;
+}
+.hm-cell:hover { transform: scale(1.05); z-index: 2; }
+.hm-label-col { display: flex; align-items: center; font-size: 11px; color: var(--txt2); font-weight: 500; padding: 0 8px; }
+.hm-label-row { font-size: 10px; color: var(--txt3); text-align: center; font-family: var(--font-mono); }
+.hm-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.hm-legend-bar { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #10B981, #F59E0B, #F97316, #EF4444); }
+
+/* ══════════════ PROGRESS BARS ══════════════ */
+.prog-row { margin-bottom: 10px; }
+.prog-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+.prog-bar { height: 6px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease, background 0.5s; }
+
+/* ══════════════ ALERTS FEED ══════════════ */
+.alert-item {
+  display: flex; gap: 10px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+  animation: alertIn 0.35s ease;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.alert-item:hover { border-color: var(--border2); }
+@keyframes alertIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:none} }
+.alert-icon { font-size: 16px; flex-shrink: 0; }
+.alert-body { flex: 1; min-width: 0; }
+.alert-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.alert-desc { font-size: 11px; color: var(--txt2); line-height: 1.5; }
+.alert-time { font-family: var(--font-mono); font-size: 9px; color: var(--txt3); margin-top: 3px; }
+.alert-item.low    { background: rgba(16,185,129,0.05); border-color: rgba(16,185,129,0.15); }
+.alert-item.medium { background: rgba(245,158,11,0.05); border-color: rgba(245,158,11,0.15); }
+.alert-item.high   { background: rgba(249,115,22,0.06); border-color: rgba(249,115,22,0.2); }
+.alert-item.critical { background: rgba(255,45,85,0.07); border-color: rgba(255,45,85,0.25); }
+
+/* ══════════════ CHARTS ══════════════ */
+.chart-wrap { position: relative; }
+svg.chart { overflow: visible; }
+
+/* ══════════════ DRIFT GAUGE ══════════════ */
+.gauge-wrap { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; padding: 8px 0; }
+.gauge-svg { overflow: visible; }
+
+/* ══════════════ FAIRNESS TABLE ══════════════ */
+.ftable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ftable th { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--txt3); padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; font-weight: 400; }
+.ftable td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.ftable tr:last-child td { border-bottom: none; }
+.ftable tr:hover td { background: rgba(255,255,255,0.02); }
+.disparity-bar { display: flex; align-items: center; gap: 6px; }
+.disp-fill { height: 4px; border-radius: 2px; min-width: 4px; transition: width 0.6s ease; }
+
+/* ══════════════ MODAL ══════════════ */
+.modal-back {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  padding: 28px;
+  max-width: 520px; width: 90%;
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from{opacity:0;transform:scale(0.96)translateY(-8px)} to{opacity:1;transform:none} }
+.modal-title { font-family: var(--font-cond); font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+.modal-sub { font-size: 13px; color: var(--txt2); line-height: 1.6; margin-bottom: 20px; }
+.modal-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--txt);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 16px;
+}
+.modal-input:focus { border-color: var(--accent); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ══════════════ REPORT MODAL ══════════════ */
+.report-body {
+  max-height: 400px; overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--txt2);
+  font-family: var(--font-ui);
+  white-space: pre-wrap;
+  margin-bottom: 16px;
+}
+.stream-cursor { display: inline-block; width: 8px; height: 12px; background: var(--accent); animation: blink 0.7s infinite; vertical-align: text-bottom; margin-left: 2px; }
+@keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
+
+/* ══════════════ TOAST ══════════════ */
+#toast-wrap { position: fixed; top: 60px; right: 16px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+.toast-item {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px;
+  max-width: 320px;
+  animation: toastIn 0.3s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+@keyframes toastIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+.toast-item.crit { border-color: rgba(255,45,85,0.4); background: rgba(255,45,85,0.1); }
+.toast-item.warn { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
+.toast-item.ok   { border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.08); }
+
+/* ══════════════ TIMELINE CHART ══════════════ */
+.timeline-chart { width: 100%; height: 120px; }
+.tl-line { fill: none; stroke-width: 1.5; }
+.tl-area { opacity: 0.08; }
+
+/* ══════════════ RISK SCORE DIAL ══════════════ */
+.risk-dial { display: flex; flex-direction: column; align-items: center; }
+
+/* ══════════════ SECTION VIEW SWITCHING ══════════════ */
+.view { display: none; }
+.view.active { display: contents; }
+
+/* ══════════════ COMPLIANCE REPORT ══════════════ */
+.compliance-section { margin-bottom: 12px; }
+.compliance-section h3 { font-family: var(--font-cond); font-size: 14px; font-weight: 700; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.5px; }
+.compliance-section p { font-size: 12px; color: var(--txt2); line-height: 1.7; }
+
+/* ══════════════ LIVE INDICATOR ══════════════ */
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: statusPulse 2s infinite;
+  flex-shrink: 0;
+}
+.live-label { font-family: var(--font-mono); font-size: 9px; color: var(--green); letter-spacing: 1px; }
+
+/* ══════════════ PRIVACY RISK ══════════════ */
+.privacy-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+  background: var(--bg3);
+}
+.privacy-icon { font-size: 18px; flex-shrink: 0; }
+.privacy-info { flex: 1; }
+.privacy-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.privacy-desc { font-size: 11px; color: var(--txt2); line-height: 1.5; }
+.privacy-meta { display: flex; gap: 10px; margin-top: 5px; }
+
+/* MITIGATION */
+.mitigation-card {
+  background: rgba(59,142,234,0.06);
+  border: 1px solid rgba(59,142,234,0.2);
+  border-radius: 7px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--txt2);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.mitigation-card strong { color: var(--accent); display: block; margin-bottom: 4px; font-size: 11px; letter-spacing: 0.5px; font-family: var(--font-mono); text-transform: uppercase; }
+
+/* ANIMATIONS */
+@keyframes numberFlip { from{transform:translateY(-4px);opacity:0.3} to{transform:none;opacity:1} }
+.num-update { animation: numberFlip 0.4s ease; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.full-width { grid-column: 1 / -1; }
+
+/* Scrollable alert list */
+.alert-scroll { max-height: 320px; overflow-y: auto; }
+
+/* Tab bar for sections */
+.section-tabs { display: flex; gap: 2px; margin-bottom: 14px; background: var(--bg2); border-radius: 8px; padding: 3px; }
+.section-tab {
+  padding: 7px 16px; border-radius: 5px; cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  color: var(--txt3); transition: all 0.2s;
+  font-family: var(--font-ui);
+}
+.section-tab.active { background: var(--panel2); color: var(--txt); }
+.section-tab:hover:not(.active) { color: var(--txt2); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="logo-mark">🛡</div>
+    <div>
+      <div class="logo-text">Ethos<span>Guard</span></div>
+      <div class="logo-sub">AI Ethics Monitor v2.4</div>
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="sys-badge">
+      <div class="status-dot live" id="sysStatusDot"></div>
+      <span id="sysStatusLabel">SYSTEM LIVE</span>
+    </div>
+    <div class="sys-badge">
+      <span style="color:var(--txt3)">Model:</span>
+      <span id="modelName" style="color:var(--accent);font-weight:500">loan-approval-v3.2</span>
+    </div>
+    <div class="sys-badge">
+      <span style="color:var(--txt3)">Inferences/hr:</span>
+      <span id="inferenceRate" style="color:var(--txt)">12,847</span>
+    </div>
+
+    <div class="topbar-right">
+      <!-- Model Toggle -->
+      <div class="model-toggle">
+        <div class="model-opt healthy active" id="btnHealthy" onclick="setModelState('healthy')">✅ Healthy Model</div>
+        <div class="model-opt compromised" id="btnCompromised" onclick="setModelState('compromised')">⚠️ Compromised Model</div>
+      </div>
+      <div class="topbar-sep"></div>
+      <button class="tbtn" onclick="openApiModal()">🔑 API Key</button>
+      <button class="tbtn primary" onclick="generateReport()">📋 Compliance Report</button>
+      <button class="tbtn" onclick="exportPDF()">⬇ PDF</button>
+    </div>
+  </div>
+
+  <!-- BODY -->
+  <div id="body-wrap">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="nav-section">
+        <div class="nav-section-label">Monitor</div>
+        <div class="nav-item active" onclick="setView('overview')"><span class="icon">📊</span> Overview</div>
+        <div class="nav-item" onclick="setView('bias')"><span class="icon">⚖️</span> Bias & Fairness <span class="nav-badge" id="biasAlertCount">0</span></div>
+        <div class="nav-item" onclick="setView('drift')"><span class="icon">📡</span> Drift Detection</div>
+        <div class="nav-item" onclick="setView('privacy')"><span class="icon">🔒</span> Privacy Risks <span class="nav-badge" id="privAlertCount">0</span></div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Analytics</div>
+        <div class="nav-item" onclick="setView('alerts')"><span class="icon">🔔</span> Alert Center <span class="nav-badge" id="totalAlertCount">0</span></div>
+        <div class="nav-item" onclick="setView('trends')"><span class="icon">📈</span> Risk Trends</div>
+        <div class="nav-item" onclick="setView('governance')"><span class="icon">📁</span> Governance</div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-label">Config</div>
+        <div class="nav-item" onclick="setView('settings')"><span class="icon">⚙️</span> Thresholds</div>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="api-status">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span>Claude AI</span>
+            <span id="apiStatusLabel" style="color:var(--txt3)">not configured</span>
+          </div>
+          <button class="api-key-btn" id="apiKeyBtn" onclick="openApiModal()">+ Configure API Key</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main">
+      <!-- ════ OVERVIEW VIEW ════ -->
+      <div class="view active" id="view-overview">
+        <!-- KPI Row -->
+        <div class="kpi-grid" id="kpiGrid"></div>
+        <!-- Second Row -->
+        <div class="risk-row">
+          <!-- Overall Risk Score -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">🎯 Overall Risk Score</div>
+              <div style="display:flex;gap:6px;align-items:center">
+                <div class="live-dot"></div><div class="live-label">LIVE</div>
+              </div>
+            </div>
+            <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;gap:10px">
+              <div id="riskGaugeSvg"></div>
+              <div id="riskScoreLabel" class="num-xl" style="color:var(--green)">24</div>
+              <div class="label">Risk Index</div>
+              <div id="riskSev" class="sev sev-low">LOW RISK</div>
+              <div class="mitigation-card" id="riskMitigation">
+                <strong>💡 Status</strong>
+                Model performing within ethical bounds. Continue monitoring.
+              </div>
+            </div>
+          </div>
+          <!-- Fairness Metrics -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">⚖️ Fairness Metrics</div>
+              <div id="fairnessSev" class="sev sev-low">PASS</div>
+            </div>
+            <div class="panel-body" id="fairnessPanel"></div>
+          </div>
+          <!-- Drift Status -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">📡 Drift Detection</div>
+              <div id="driftSev" class="sev sev-low">STABLE</div>
+            </div>
+            <div class="panel-body" id="driftPanel"></div>
+          </div>
+        </div>
+        <!-- Third Row: Timeline + Heatmap -->
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">📈 Risk Trend Timeline</div>
+              <div style="display:flex;gap:14px">
+                <div style="display:flex;align-items:center;gap:4px"><div style="width:12px;height:2px;background:var(--red);border-radius:1px"></div><span class="label-sm">BIAS</span></div>
+                <div style="display:flex;align-items:center;gap:4px"><div style="width:12px;height:2px;background:var(--amber);border-radius:1px"></div><span class="label-sm">DRIFT</span></div>
+                <div style="display:flex;align-items:center;gap:4px"><div style="width:12px;height:2px;background:var(--purple);border-radius:1px"></div><span class="label-sm">PRIVACY</span></div>
+              </div>
+            </div>
+            <div class="panel-body" style="padding:10px 16px 8px">
+              <svg id="timelineChart" width="100%" height="110" viewBox="0 0 500 110" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">🌡 Bias Heatmap</div>
+              <span class="label-sm">Demographic × Feature</span>
+            </div>
+            <div class="panel-body" id="heatmapPanel"></div>
+          </div>
+        </div>
+        <!-- Bottom: Recent Alerts -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">🔔 Recent Alerts</div>
+            <button class="tbtn" style="padding:4px 10px;font-size:11px" onclick="setView('alerts')">View All →</button>
+          </div>
+          <div class="panel-body" id="recentAlertsPanel" style="padding:10px 12px"></div>
+        </div>
+      </div>
+
+      <!-- ════ BIAS VIEW ════ -->
+      <div class="view" id="view-bias">
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">⚖️ Demographic Parity</div>
+              <div id="dpSev" class="sev sev-low">PASS</div>
+            </div>
+            <div class="panel-body" id="demographicParityPanel"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">🎯 Equal Opportunity</div>
+              <div id="eqopSev" class="sev sev-low">PASS</div>
+            </div>
+            <div class="panel-body" id="equalOpportunityPanel"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📊 Protected Group Comparison</div>
+            <div style="display:flex;align-items:center;gap:6px"><div class="live-dot"></div><div class="live-label">LIVE</div></div>
+          </div>
+          <div class="panel-body">
+            <table class="ftable" id="fairnessTable"></table>
+          </div>
+        </div>
+        <div class="panel full-width">
+          <div class="panel-header">
+            <div class="panel-title">🌡 Intersectional Bias Heatmap</div>
+          </div>
+          <div class="panel-body" id="biasHeatmapFull"></div>
+        </div>
+      </div>
+
+      <!-- ════ DRIFT VIEW ════ -->
+      <div class="view" id="view-drift">
+        <div class="grid-3">
+          <div class="panel" id="driftCard1"></div>
+          <div class="panel" id="driftCard2"></div>
+          <div class="panel" id="driftCard3"></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📊 Input Distribution Shift</div></div>
+            <div class="panel-body" id="inputDriftChart"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📤 Output Distribution Shift</div></div>
+            <div class="panel-body" id="outputDriftChart"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ PRIVACY VIEW ════ -->
+      <div class="view" id="view-privacy">
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🔍 Anomalous Access Patterns</div></div>
+            <div class="panel-body" id="accessPanel"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🧬 Sensitive Attribute Inference Risk</div></div>
+            <div class="panel-body" id="inferencePanel"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📋 Privacy Risk Log</div></div>
+          <div class="panel-body" id="privacyLog"></div>
+        </div>
+      </div>
+
+      <!-- ════ ALERTS VIEW ════ -->
+      <div class="view" id="view-alerts">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">🔔 Alert Center</div>
+            <div style="display:flex;gap:8px">
+              <div class="live-dot"></div><div class="live-label">LIVE FEED</div>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="alert-scroll" id="alertFeed" style="max-height:600px;padding:0 0 4px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ TRENDS VIEW ════ -->
+      <div class="view" id="view-trends">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📈 Extended Risk Timeline (24h)</div></div>
+          <div class="panel-body" style="padding:14px 16px 10px">
+            <svg id="trendChart" width="100%" height="200" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📊 Bias Trend</div></div>
+            <div class="panel-body" id="biasTrendMini"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">📡 Drift Trend</div></div>
+            <div class="panel-body" id="driftTrendMini"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header"><div class="panel-title">🔒 Privacy Trend</div></div>
+            <div class="panel-body" id="privTrendMini"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ GOVERNANCE VIEW ════ -->
+      <div class="view" id="view-governance">
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">📁 AI Governance Report</div>
+            <div style="display:flex;gap:8px">
+              <button class="tbtn" onclick="generateReport()">🤖 Generate AI Report</button>
+              <button class="tbtn" onclick="exportPDF()">⬇ Export PDF</button>
+            </div>
+          </div>
+          <div class="panel-body" id="governanceBody" style="padding:16px 20px">
+            <div style="text-align:center;padding:40px;color:var(--txt3)">
+              <div style="font-size:48px;margin-bottom:12px;opacity:0.3">📋</div>
+              <div>Click "Generate AI Report" to create a compliance report using Claude AI,<br>or use the demo mode for an instant simulated report.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ════ SETTINGS VIEW ════ -->
+      <div class="view" id="view-settings">
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">⚙️ Alert Thresholds</div></div>
+          <div class="panel-body" id="settingsPanel"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-back" id="apiModal" style="display:none">
+  <div class="modal">
+    <div class="modal-title">🔑 Configure Claude AI</div>
+    <div class="modal-sub">Connect Claude for AI-generated compliance reports, risk explanations, and governance narratives tailored to your model's current risk state.</div>
+    <div class="label" style="margin-bottom:6px">Anthropic API Key</div>
+    <input class="modal-input" id="apiKeyInput" type="password" placeholder="sk-ant-api03-…" />
+    <div style="font-size:11px;color:var(--txt3);margin-bottom:16px;line-height:1.6;background:var(--bg);border-radius:6px;padding:10px">
+      🔒 Stored in memory only. Used exclusively for generating compliance reports.
+    </div>
+    <div class="modal-actions">
+      <button class="tbtn" onclick="closeApiModal(true)">Use Demo Mode</button>
+      <button class="tbtn primary" onclick="saveApiKey()">Connect</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="reportModal" style="display:none">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-title">📋 AI Governance Compliance Report</div>
+    <div class="label" style="margin-bottom:10px;margin-top:4px" id="reportMeta"></div>
+    <div class="report-body" id="reportBody"></div>
+    <div class="modal-actions">
+      <button class="tbtn" onclick="document.getElementById('reportModal').style.display='none'">Close</button>
+      <button class="tbtn primary" onclick="exportPDF()">⬇ Export PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-wrap"></div>
+
+<script>
+/* ════════════════════════════════════════
+   STATE ENGINE
+════════════════════════════════════════ */
+let API_KEY = '';
+let isDemoMode = true;
+let modelState = 'healthy'; // 'healthy' | 'compromised'
+let tick = 0;
+let alerts = [];
+let thresholds = { bias: 0.2, drift: 0.3, privacy: 0.6 };
+let history = { bias:[], drift:[], privacy:[], risk:[] };
+const MAX_HISTORY = 60;
+
+/* ══ SIMULATION DATA ══ */
+function getSimState() {
+  const compromised = modelState === 'compromised';
+  const t = tick;
+  const noise = () => (Math.random() - 0.5) * 0.015;
+
+  if (compromised) {
+    const progress = Math.min(1, tick / 80);
+    return {
+      accuracy: 0.91 - progress * 0.14 + noise(),
+      precision: 0.89 - progress * 0.16 + noise(),
+      recall:    0.86 - progress * 0.12 + noise(),
+      f1:        0.87 - progress * 0.14 + noise(),
+      biasScore: 0.08 + progress * 0.62 + noise() * 0.5,
+      fairnessScore: 0.94 - progress * 0.45 + noise(),
+      overallRisk: Math.round(12 + progress * 78 + noise() * 10),
+      driftInput:  0.04 + progress * 0.56 + noise() * 0.3,
+      driftOutput: 0.03 + progress * 0.48 + noise() * 0.3,
+      driftConcept:0.02 + progress * 0.43 + noise() * 0.3,
+      privacyRisk: 0.1 + progress * 0.65 + noise() * 0.2,
+      inferenceRate: Math.round(12847 + progress * 4200),
+      groups: {
+        'White':       { approval: 0.72 - progress * 0.02 + noise(), tpr: 0.81 - noise() },
+        'Black':       { approval: 0.71 - progress * 0.22 + noise(), tpr: 0.80 - progress * 0.25 + noise() },
+        'Hispanic':    { approval: 0.70 - progress * 0.19 + noise(), tpr: 0.79 - progress * 0.21 + noise() },
+        'Asian':       { approval: 0.73 - progress * 0.04 + noise(), tpr: 0.82 - noise() },
+        'Female':      { approval: 0.71 - progress * 0.18 + noise(), tpr: 0.80 - progress * 0.20 + noise() },
+        'Male':        { approval: 0.72 - progress * 0.01 + noise(), tpr: 0.81 - noise() },
+        'Low Income':  { approval: 0.62 - progress * 0.28 + noise(), tpr: 0.70 - progress * 0.30 + noise() },
+        'Mid Income':  { approval: 0.71 - progress * 0.03 + noise(), tpr: 0.80 + noise() },
+      },
+    };
+  } else {
+    return {
+      accuracy: 0.934 + noise(),
+      precision: 0.921 + noise(),
+      recall:    0.908 + noise(),
+      f1:        0.914 + noise(),
+      biasScore: 0.06 + Math.abs(noise()) * 2,
+      fairnessScore: 0.96 + noise(),
+      overallRisk: Math.round(14 + Math.abs(noise()) * 20),
+      driftInput:  0.04 + Math.abs(noise()) * 0.5,
+      driftOutput: 0.03 + Math.abs(noise()) * 0.4,
+      driftConcept:0.02 + Math.abs(noise()) * 0.3,
+      privacyRisk: 0.07 + Math.abs(noise()) * 0.5,
+      inferenceRate: Math.round(12847 + (Math.random()-0.5)*400),
+      groups: {
+        'White':       { approval: 0.72 + noise(), tpr: 0.81 + noise() },
+        'Black':       { approval: 0.71 + noise(), tpr: 0.80 + noise() },
+        'Hispanic':    { approval: 0.70 + noise(), tpr: 0.79 + noise() },
+        'Asian':       { approval: 0.73 + noise(), tpr: 0.82 + noise() },
+        'Female':      { approval: 0.71 + noise(), tpr: 0.80 + noise() },
+        'Male':        { approval: 0.72 + noise(), tpr: 0.81 + noise() },
+        'Low Income':  { approval: 0.62 + noise(), tpr: 0.70 + noise() },
+        'Mid Income':  { approval: 0.71 + noise(), tpr: 0.80 + noise() },
+      },
+    };
+  }
+}
+
+let prevState = null;
+function clamp(v, lo=0, hi=1){ return Math.max(lo, Math.min(hi, v)); }
+
+/* ════════════════════════════════════════
+   VIEW SWITCHING
+════════════════════════════════════════ */
+let currentView = 'overview';
+function setView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const vEl = document.getElementById('view-' + v);
+  if (vEl) vEl.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(el => {
+    if (el.getAttribute('onclick')?.includes("'" + v + "'")) el.classList.add('active');
+  });
+  currentView = v;
+  renderCurrentView();
+}
+
+/* ════════════════════════════════════════
+   MODEL STATE
+════════════════════════════════════════ */
+function setModelState(state) {
+  modelState = state;
+  tick = 0;
+  document.getElementById('btnHealthy').classList.toggle('active', state === 'healthy');
+  document.getElementById('btnCompromised').classList.toggle('active', state === 'compromised');
+  if (state === 'compromised') {
+    showToast('⚠️ Compromised model loaded — bias injection active', 'warn');
+    document.getElementById('sysStatusDot').className = 'status-dot crit';
+    document.getElementById('sysStatusLabel').textContent = 'ANOMALY DETECTED';
+  } else {
+    showToast('✅ Healthy model restored — monitoring stable', 'ok');
+    document.getElementById('sysStatusDot').className = 'status-dot live';
+    document.getElementById('sysStatusLabel').textContent = 'SYSTEM LIVE';
+  }
+  alerts = [];
+  history = { bias:[], drift:[], privacy:[], risk:[] };
+}
+
+/* ════════════════════════════════════════
+   COLOR HELPERS
+════════════════════════════════════════ */
+function riskColor(v, lo=0.15, hi=0.5) {
+  if (v < lo) return '#10B981';
+  if (v < hi * 0.6) return '#F59E0B';
+  if (v < hi) return '#F97316';
+  return '#EF4444';
+}
+function scoreColor(s) {
+  if (s < 30) return '#10B981';
+  if (s < 55) return '#F59E0B';
+  if (s < 75) return '#F97316';
+  return '#EF4444';
+}
+function metricColor(v, good=0.9) {
+  if (v >= good) return '#10B981';
+  if (v >= good - 0.05) return '#F59E0B';
+  if (v >= good - 0.12) return '#F97316';
+  return '#EF4444';
+}
+function severityFromRisk(r) {
+  if (r < 30) return 'low';
+  if (r < 55) return 'medium';
+  if (r < 75) return 'high';
+  return 'critical';
+}
+function getSevClass(sev) { return 'sev sev-' + sev; }
+function getSevLabel(sev) {
+  return { low:'LOW RISK', medium:'MEDIUM', high:'HIGH RISK', critical:'CRITICAL' }[sev] || sev.toUpperCase();
+}
+
+/* ════════════════════════════════════════
+   KPI GRID
+════════════════════════════════════════ */
+function renderKPIs(s) {
+  const kpis = [
+    { key:'accuracy',  label:'Accuracy',      val: s.accuracy,       fmt: v => (v*100).toFixed(1)+'%', color: metricColor(s.accuracy), icon:'🎯' },
+    { key:'precision', label:'Precision',      val: s.precision,      fmt: v => (v*100).toFixed(1)+'%', color: metricColor(s.precision), icon:'🔬' },
+    { key:'recall',    label:'Recall',         val: s.recall,         fmt: v => (v*100).toFixed(1)+'%', color: metricColor(s.recall), icon:'📡' },
+    { key:'f1',        label:'F1 Score',       val: s.f1,             fmt: v => (v*100).toFixed(1)+'%', color: metricColor(s.f1), icon:'⚡' },
+    { key:'bias',      label:'Bias Score',     val: s.biasScore,      fmt: v => v.toFixed(3),           color: riskColor(s.biasScore, 0.1, 0.4), icon:'⚖️' },
+    { key:'fairness',  label:'Fairness Index', val: s.fairnessScore,  fmt: v => (v*100).toFixed(1)+'%', color: metricColor(s.fairnessScore, 0.9), icon:'🌐' },
+  ];
+  const grid = document.getElementById('kpiGrid');
+  if (!grid) return;
+  grid.innerHTML = kpis.map(k => {
+    const pct = k.key === 'bias' ? Math.min(100, k.val * 200) : k.val * 100;
+    const delta = prevState ? (k.val - (prevState[k.key === 'bias' ? 'biasScore' : k.key === 'fairness' ? 'fairnessScore' : k.key] || 0)) : 0;
+    const dSign = delta >= 0 ? '▲' : '▼';
+    const dColor = (k.key === 'bias' ? delta > 0 : delta < 0) ? 'var(--red)' : 'var(--green)';
+    return `<div class="kpi-card" style="--kpi-color:${k.color}">
+      <div class="kpi-icon">${k.icon}</div>
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.color}">${k.fmt(k.val)}</div>
+      <div class="kpi-delta" style="color:${dColor}">${dSign} ${Math.abs(delta * (k.key==='bias'?1000:100)).toFixed(1)}${k.key==='bias'?'m':'bp'}</div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${k.color}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════
+   RISK GAUGE SVG
+════════════════════════════════════════ */
+function renderRiskGauge(score) {
+  const el = document.getElementById('riskGaugeSvg');
+  if (!el) return;
+  const color = scoreColor(score);
+  const angle = -135 + (score/100) * 270;
+  const rad = (a) => a * Math.PI / 180;
+  const cx = 70, cy = 70, r = 52;
+  const arc = (a1, a2, col, w=8) => {
+    const x1 = cx + r*Math.cos(rad(a1)), y1 = cy + r*Math.sin(rad(a1));
+    const x2 = cx + r*Math.cos(rad(a2)), y2 = cy + r*Math.sin(rad(a2));
+    const lg = Math.abs(a2-a1) > 180 ? 1 : 0;
+    return `<path d="M${x1},${y1} A${r},${r},0,${lg},1,${x2},${y2}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`;
+  };
+  const needleX = cx + 38*Math.cos(rad(angle));
+  const needleY = cy + 38*Math.sin(rad(angle));
+  el.innerHTML = `<svg width="140" height="100" viewBox="0 0 140 100">
+    <defs>
+      <linearGradient id="rg1" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#10B981"/>
+        <stop offset="40%" stop-color="#F59E0B"/>
+        <stop offset="70%" stop-color="#F97316"/>
+        <stop offset="100%" stop-color="#EF4444"/>
+      </linearGradient>
+    </defs>
+    ${arc(-135, 135, 'rgba(255,255,255,0.07)', 10)}
+    ${arc(-135, angle, `url(#rg1)`, 10)}
+    <circle cx="${cx}" cy="${cy}" r="4" fill="${color}"/>
+    <line x1="${cx}" y1="${cy}" x2="${needleX}" y2="${needleY}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="3" fill="${color}" opacity="0.8"/>
+  </svg>`;
+  const numEl = document.getElementById('riskScoreLabel');
+  if (numEl) { numEl.textContent = score; numEl.style.color = color; }
+  const sev = severityFromRisk(score);
+  const sevEl = document.getElementById('riskSev');
+  if (sevEl) { sevEl.className = getSevClass(sev); sevEl.textContent = getSevLabel(sev); }
+  const mitEl = document.getElementById('riskMitigation');
+  if (mitEl) {
+    const msgs = {
+      low: 'Model performing within ethical bounds. Continue regular monitoring.',
+      medium: 'Minor fairness degradation detected. Review recent data batches.',
+      high: 'Significant bias drift active. Immediate retraining recommended.',
+      critical: '🚨 Critical ethical violations detected. Suspend model and escalate.',
+    };
+    mitEl.innerHTML = `<strong>💡 Recommended Action</strong>${msgs[sev]}`;
+  }
+  const systDot = document.getElementById('sysStatusDot');
+  if (systDot && modelState === 'healthy') {
+    systDot.className = sev === 'low' ? 'status-dot live' : sev === 'critical' ? 'status-dot crit' : 'status-dot warn';
+  }
+}
+
+/* ════════════════════════════════════════
+   FAIRNESS PANEL
+════════════════════════════════════════ */
+function renderFairnessPanel(s) {
+  const el = document.getElementById('fairnessPanel');
+  if (!el) return;
+  const groups = s.groups;
+  const refGroup = 'White';
+  const refApproval = clamp(groups[refGroup]?.approval || 0.72);
+  const metrics = [
+    { label: 'Demographic Parity Gap', val: Math.max(...Object.values(groups).map(g=>refApproval - clamp(g.approval, 0.3, 1))), thresh: 0.1 },
+    { label: 'Equal Opportunity Gap',  val: Math.max(...Object.values(groups).map(g=>0.81 - clamp(g.tpr, 0.3, 1))), thresh: 0.1 },
+    { label: 'Predictive Parity',      val: clamp(s.biasScore * 0.8), thresh: 0.15 },
+    { label: 'Calibration Score',      val: clamp(1 - s.fairnessScore), thresh: 0.1 },
+  ];
+  el.innerHTML = metrics.map(m => {
+    const color = m.val < m.thresh ? '#10B981' : m.val < m.thresh*2 ? '#F59E0B' : '#EF4444';
+    const pct = Math.min(100, m.val * 200);
+    return `<div class="prog-row">
+      <div class="prog-header"><span style="font-size:12px;font-weight:500">${m.label}</span><span class="mono" style="color:${color}">${(m.val*100).toFixed(1)}%</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+  const maxGap = metrics[0].val;
+  const fairSev = document.getElementById('fairnessSev');
+  if (fairSev) {
+    const sev = maxGap < 0.05 ? 'low' : maxGap < 0.15 ? 'medium' : maxGap < 0.25 ? 'high' : 'critical';
+    fairSev.className = getSevClass(sev);
+    fairSev.textContent = sev === 'low' ? 'PASS' : sev === 'critical' ? 'FAIL' : sev.toUpperCase();
+  }
+}
+
+/* ════════════════════════════════════════
+   DRIFT PANEL
+════════════════════════════════════════ */
+function renderDriftPanel(s) {
+  const el = document.getElementById('driftPanel');
+  if (!el) return;
+  const drifts = [
+    { label: 'Input Distribution', val: s.driftInput, icon:'📥' },
+    { label: 'Output Distribution', val: s.driftOutput, icon:'📤' },
+    { label: 'Concept Drift', val: s.driftConcept, icon:'🧠' },
+  ];
+  el.innerHTML = drifts.map(d => {
+    const color = riskColor(d.val, 0.1, 0.4);
+    const pct = Math.min(100, d.val * 200);
+    const sev = d.val < 0.1 ? 'Stable' : d.val < 0.25 ? 'Minor Drift' : d.val < 0.4 ? 'Moderate' : 'Severe Drift';
+    return `<div class="prog-row">
+      <div class="prog-header"><span style="font-size:12px">${d.icon} ${d.label}</span><span class="mono" style="color:${color}">${sev}</span></div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+  const maxDrift = Math.max(s.driftInput, s.driftOutput, s.driftConcept);
+  const sevEl = document.getElementById('driftSev');
+  if (sevEl) {
+    const sev = maxDrift < 0.1 ? 'low' : maxDrift < 0.25 ? 'medium' : maxDrift < 0.4 ? 'high' : 'critical';
+    sevEl.className = getSevClass(sev);
+    sevEl.textContent = sev === 'low' ? 'STABLE' : sev === 'critical' ? 'SEVERE DRIFT' : sev.toUpperCase() + ' DRIFT';
+  }
+}
+
+/* ════════════════════════════════════════
+   HEATMAP
+════════════════════════════════════════ */
+function renderHeatmap(containerId, s) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const groups = ['White','Black','Hispanic','Asian','Female','Male','Low Income'];
+  const features = ['Income','Credit','Employment','Age','Location'];
+  const biasBase = s.biasScore;
+
+  // Build grid
+  const colCount = features.length + 1;
+  let html = `<div style="display:grid;grid-template-columns:90px repeat(${features.length},1fr);gap:2px;font-size:11px">`;
+  html += `<div></div>` + features.map(f => `<div class="hm-label-row">${f}</div>`).join('');
+  groups.forEach((g, gi) => {
+    html += `<div class="hm-label-col">${g}</div>`;
+    features.forEach((f, fi) => {
+      const val = clamp(biasBase * (0.5 + Math.sin(gi * 1.3 + fi * 0.9) * 0.5 + (gi > 4 ? 0.3 : 0)) + Math.random() * 0.02);
+      const alpha = 0.2 + val * 0.8;
+      const r = Math.round(16 + val * 239), g2 = Math.round(185 - val * 149), b = Math.round(129 - val * 87);
+      const bg = `rgba(${r},${g2},${b},${alpha})`;
+      const textColor = val > 0.5 ? '#fff' : '#e8e8e8';
+      html += `<div class="hm-cell" style="background:${bg};color:${textColor}" title="${g} × ${f}: ${(val*100).toFixed(0)}% risk">${(val*100).toFixed(0)}</div>`;
+    });
+  });
+  html += `</div>`;
+  html += `<div class="hm-legend"><span class="label-sm" style="white-space:nowrap">LOW RISK</span><div class="hm-legend-bar"></div><span class="label-sm" style="white-space:nowrap">HIGH RISK</span></div>`;
+  el.innerHTML = html;
+}
+
+/* ════════════════════════════════════════
+   FAIRNESS TABLE
+════════════════════════════════════════ */
+function renderFairnessTable(s) {
+  const el = document.getElementById('fairnessTable');
+  if (!el) return;
+  const groups = s.groups;
+  const ref = groups['White']?.approval || 0.72;
+  el.innerHTML = `<thead><tr>
+    <th>Demographic Group</th>
+    <th>Approval Rate</th>
+    <th>True Positive Rate</th>
+    <th>Disparity vs Ref.</th>
+    <th>Fairness Status</th>
+    <th>Risk</th>
+  </tr></thead><tbody>` +
+  Object.entries(groups).map(([name, g]) => {
+    const disp = Math.abs(clamp(ref) - clamp(g.approval));
+    const color = riskColor(disp, 0.03, 0.15);
+    const dispPct = Math.min(100, disp * 500);
+    const sev = disp < 0.03 ? 'low' : disp < 0.08 ? 'medium' : disp < 0.15 ? 'high' : 'critical';
+    return `<tr>
+      <td style="font-weight:600">${name}</td>
+      <td class="mono">${(clamp(g.approval)*100).toFixed(1)}%</td>
+      <td class="mono">${(clamp(g.tpr)*100).toFixed(1)}%</td>
+      <td><div class="disparity-bar"><div class="disp-fill" style="width:${dispPct}px;background:${color}"></div><span class="mono" style="color:${color}">${(disp*100).toFixed(1)}%</span></div></td>
+      <td><div class="sev sev-${sev}">${getSevLabel(sev)}</div></td>
+      <td style="color:${color};font-family:var(--font-mono);font-size:11px">${(disp*100).toFixed(2)}</td>
+    </tr>`;
+  }).join('') + `</tbody>`;
+}
+
+/* ════════════════════════════════════════
+   TIMELINE CHART
+════════════════════════════════════════ */
+function renderTimeline(svgId, data, H=110, W=500) {
+  const svg = document.getElementById(svgId);
+  if (!svg || !data.bias.length) return;
+  const N = data.bias.length;
+  const pad = 8;
+  const xScale = (i) => pad + (i / Math.max(N-1,1)) * (W - pad*2);
+  const yScale = (v, lo=0, hi=1) => H - pad - ((clamp(v,lo,hi) - lo) / (hi-lo)) * (H - pad*2);
+
+  const line = (arr, lo=0, hi=0.8) => arr.map((v,i)=>`${i===0?'M':'L'}${xScale(i)},${yScale(v,lo,hi)}`).join(' ');
+  const area = (arr, lo=0, hi=0.8) => {
+    const pts = arr.map((v,i)=>`${xScale(i)},${yScale(v,lo,hi)}`);
+    return `M${xScale(0)},${H-pad} ${pts.map((p,i)=>`L${p}`).join(' ')} L${xScale(N-1)},${H-pad} Z`;
+  };
+
+  svg.innerHTML = `
+    <path d="${area(data.bias)}" fill="var(--red)" opacity="0.08"/>
+    <path d="${line(data.bias)}" fill="none" stroke="var(--red)" stroke-width="1.5" class="tl-line"/>
+    <path d="${area(data.drift)}" fill="var(--amber)" opacity="0.08"/>
+    <path d="${line(data.drift)}" fill="none" stroke="var(--amber)" stroke-width="1.5" class="tl-line"/>
+    <path d="${area(data.privacy)}" fill="var(--purple)" opacity="0.08"/>
+    <path d="${line(data.privacy)}" fill="none" stroke="var(--purple)" stroke-width="1.5" class="tl-line"/>
+    ${N > 1 ? `<circle cx="${xScale(N-1)}" cy="${yScale(data.bias[N-1])}" r="3" fill="var(--red)"/>
+    <circle cx="${xScale(N-1)}" cy="${yScale(data.drift[N-1])}" r="3" fill="var(--amber)"/>
+    <circle cx="${xScale(N-1)}" cy="${yScale(data.privacy[N-1])}" r="3" fill="var(--purple)"/>` : ''}
+  `;
+}
+
+/* ════════════════════════════════════════
+   DRIFT VIEW CARDS
+════════════════════════════════════════ */
+function renderDriftCards(s) {
+  const drifts = [
+    { id:'driftCard1', label:'Input Feature Drift', val:s.driftInput, icon:'📥', desc:'PSI score measuring distribution shift in input features vs. training baseline.', thresh:0.25 },
+    { id:'driftCard2', label:'Output Prediction Drift', val:s.driftOutput, icon:'📤', desc:'KL-divergence in prediction distribution. High values indicate output instability.', thresh:0.2 },
+    { id:'driftCard3', label:'Concept Drift Score', val:s.driftConcept, icon:'🧠', desc:'Measure of underlying data relationship changes. Indicates need for retraining.', thresh:0.2 },
+  ];
+  drifts.forEach(d => {
+    const el = document.getElementById(d.id);
+    if (!el) return;
+    const color = riskColor(d.val, 0.1, d.thresh);
+    const sev = severityFromRisk(Math.round(d.val * 100 * 1.5));
+    const pct = Math.min(100, (d.val / d.thresh) * 70);
+    el.innerHTML = `<div class="panel-header">
+        <div class="panel-title">${d.icon} ${d.label}</div>
+        <div class="sev sev-${sev}">${d.val < 0.1 ? 'STABLE' : sev.toUpperCase()}</div>
+      </div>
+      <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div class="num-xl" style="color:${color}">${d.val.toFixed(3)}</div>
+        <div class="label">Drift Score</div>
+        <div style="width:100%;background:rgba(255,255,255,0.06);border-radius:4px;height:8px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:width 0.8s ease;box-shadow:0 0 8px ${color}44"></div>
+        </div>
+        <div style="font-size:11px;color:var(--txt2);text-align:center;line-height:1.5">${d.desc}</div>
+        <div style="font-size:10px;font-family:var(--font-mono);color:var(--txt3)">THRESHOLD: ${d.thresh}</div>
+      </div>`;
+  });
+}
+
+/* ════════════════════════════════════════
+   PRIVACY PANEL
+════════════════════════════════════════ */
+function renderPrivacyPanel(s) {
+  const accessEl = document.getElementById('accessPanel');
+  const inferEl = document.getElementById('inferencePanel');
+
+  if (accessEl) {
+    const risk = s.privacyRisk;
+    const patterns = [
+      { label:'Bulk Record Access', count: Math.round(risk * 120 + 5), threshold:50, icon:'📋' },
+      { label:'High-Frequency Queries', count: Math.round(risk * 340 + 20), threshold:200, icon:'⚡' },
+      { label:'Cross-Table Joins', count: Math.round(risk * 45 + 3), threshold:30, icon:'🔗' },
+      { label:'Sensitive Field Access', count: Math.round(risk * 87 + 10), threshold:40, icon:'🔐' },
+    ];
+    accessEl.innerHTML = patterns.map(p => {
+      const over = p.count > p.threshold;
+      const color = over ? 'var(--red)' : 'var(--green)';
+      return `<div class="privacy-item" style="${over?'border-color:rgba(239,68,68,0.3)':''}">
+        <div class="privacy-icon">${p.icon}</div>
+        <div class="privacy-info">
+          <div class="privacy-title" style="color:${color}">${p.label}</div>
+          <div class="privacy-desc">Count: <b style="color:${color}">${p.count.toLocaleString()}</b> / threshold: ${p.threshold.toLocaleString()}</div>
+        </div>
+        <div class="sev sev-${over?'critical':'low'}">${over?'FLAG':'OK'}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if (inferEl) {
+    const attrs = [
+      { name:'Race/Ethnicity', risk: clamp(s.privacyRisk * 0.9 + 0.05) },
+      { name:'Income Level',   risk: clamp(s.privacyRisk * 0.85 + 0.08) },
+      { name:'Health Status',  risk: clamp(s.privacyRisk * 0.7 + 0.04) },
+      { name:'Political Views',risk: clamp(s.privacyRisk * 0.6 + 0.03) },
+      { name:'Location',       risk: clamp(s.privacyRisk * 0.75 + 0.06) },
+    ];
+    inferEl.innerHTML = attrs.map(a => {
+      const color = riskColor(a.risk, 0.3, 0.7);
+      return `<div class="prog-row">
+        <div class="prog-header"><span style="font-size:12px">${a.name}</span><span class="mono" style="color:${color}">${(a.risk*100).toFixed(0)}%</span></div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${a.risk*100}%;background:${color}"></div></div>
+      </div>`;
+    }).join('');
+  }
+}
+
+/* ════════════════════════════════════════
+   ALERT GENERATION
+════════════════════════════════════════ */
+const alertTemplates = {
+  bias: [
+    s => ({ sev:'critical', title:'Critical Bias Detected: Black Applicants', desc:`Approval rate disparity reached ${((s.groups.Black?.approval - s.groups.White?.approval) * -100).toFixed(1)}pp vs. reference group. Violates 80% rule.`, icon:'⚖️', action:'Retrain model with balanced dataset immediately.' }),
+    s => ({ sev:'high', title:'Gender Disparity Above Threshold', desc:`Female approval rate ${((s.groups.Female?.approval || 0)*100).toFixed(1)}% vs Male ${((s.groups.Male?.approval || 0)*100).toFixed(1)}%. Gap: ${Math.abs(((s.groups.Female?.approval||0)-(s.groups.Male?.approval||0))*100).toFixed(1)}pp`, icon:'👥', action:'Audit feature importance for gender-correlated proxies.' }),
+    s => ({ sev:'high', title:'Low Income Group Discrimination Risk', desc:`Low-income applicants showing ${((s.groups['Low Income']?.approval || 0.62)*100).toFixed(1)}% approval vs ${((s.groups['Mid Income']?.approval || 0.71)*100).toFixed(1)}% for mid-income.`, icon:'💰', action:'Review income-correlated features for disparate impact.' }),
+  ],
+  drift: [
+    s => ({ sev:'high', title:'Input Distribution Shift Detected', desc:`PSI score ${s.driftInput.toFixed(3)} exceeds warning threshold (0.25). Feature distributions diverging from training baseline.`, icon:'📡', action:'Compare current data distribution against training set statistics.' }),
+    s => ({ sev:'medium', title:'Prediction Output Drift', desc:`Model output distribution shifted. KL-divergence: ${s.driftOutput.toFixed(3)}. Approval rate trending ${s.driftOutput > 0.3 ? 'downward' : 'upward'}.`, icon:'📊', action:'Monitor prediction stability. Schedule retraining if persists.' }),
+  ],
+  privacy: [
+    s => ({ sev:'critical', title:'Sensitive Attribute Inference Risk', desc:`Race/ethnicity inference probability ${(s.privacyRisk*90+5).toFixed(0)}%. Model may be encoding protected attributes via proxies.`, icon:'🔒', action:'Audit model for disparate impact via proxy features.' }),
+    s => ({ sev:'high', title:'Anomalous Data Access Pattern', desc:`${Math.round(s.privacyRisk*340+20)} high-frequency queries detected in 1hr window. Exceeds baseline by ${Math.round(s.privacyRisk*280)}%.`, icon:'🔍', action:'Investigate query source. Implement rate limiting.' }),
+  ],
+};
+
+let lastAlertTick = { bias: -10, drift: -10, privacy: -10 };
+
+function checkAlerts(s) {
+  const newAlerts = [];
+  const biasThresh = thresholds.bias;
+  const driftThresh = thresholds.drift;
+  const privThresh = thresholds.privacy;
+
+  if (s.biasScore > biasThresh && tick - lastAlertTick.bias > 8) {
+    const template = alertTemplates.bias[Math.floor(Math.random() * alertTemplates.bias.length)];
+    const a = template(s);
+    a.ts = new Date(); a.id = Date.now() + '_bias';
+    newAlerts.push(a); lastAlertTick.bias = tick;
+    if (a.sev === 'critical') showToast(`🚨 ${a.title}`, 'crit');
+    else showToast(`⚠️ ${a.title}`, 'warn');
+  }
+  if (s.driftInput > driftThresh && tick - lastAlertTick.drift > 12) {
+    const a = alertTemplates.drift[0](s);
+    a.ts = new Date(); a.id = Date.now() + '_drift';
+    newAlerts.push(a); lastAlertTick.drift = tick;
+    showToast(`📡 ${a.title}`, 'warn');
+  }
+  if (s.privacyRisk > privThresh && tick - lastAlertTick.privacy > 15) {
+    const a = alertTemplates.privacy[0](s);
+    a.ts = new Date(); a.id = Date.now() + '_priv';
+    newAlerts.push(a); lastAlertTick.privacy = tick;
+    showToast(`🔒 ${a.title}`, 'crit');
+  }
+
+  newAlerts.forEach(a => alerts.unshift(a));
+  if (alerts.length > 50) alerts = alerts.slice(0, 50);
+
+  // Update badge counts
+  document.getElementById('biasAlertCount').textContent = alerts.filter(a=>a.id.includes('bias')).length;
+  document.getElementById('privAlertCount').textContent = alerts.filter(a=>a.id.includes('priv')).length;
+  document.getElementById('totalAlertCount').textContent = alerts.length;
+}
+
+function renderAlertFeed(containerId, limit=8) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!alerts.length) {
+    el.innerHTML = `<div style="text-align:center;padding:24px;color:var(--txt3);font-size:12px"><div style="font-size:36px;opacity:0.3;margin-bottom:8px">🔔</div>No alerts generated yet. Alerts appear as risks are detected.</div>`;
+    return;
+  }
+  const show = alerts.slice(0, limit);
+  el.innerHTML = show.map(a => {
+    const ts = a.ts instanceof Date ? a.ts.toLocaleTimeString() : '--:--:--';
+    return `<div class="alert-item ${a.sev}">
+      <div class="alert-icon">${a.icon}</div>
+      <div class="alert-body">
+        <div class="alert-title">${a.title} <span class="sev sev-${a.sev}" style="margin-left:6px">${a.sev.toUpperCase()}</span></div>
+        <div class="alert-desc">${a.desc}</div>
+        <div class="alert-time">🕐 ${ts}</div>
+        <div class="mitigation-card" style="margin-top:6px"><strong>Mitigation</strong>${a.action}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════
+   SETTINGS PANEL
+════════════════════════════════════════ */
+function renderSettings() {
+  const el = document.getElementById('settingsPanel');
+  if (!el) return;
+  const controls = [
+    { key:'bias', label:'Bias Score Alert Threshold', min:0.05, max:0.5, step:0.01 },
+    { key:'drift', label:'Distribution Drift Alert Threshold', min:0.1, max:0.8, step:0.01 },
+    { key:'privacy', label:'Privacy Risk Alert Threshold', min:0.2, max:0.9, step:0.01 },
+  ];
+  el.innerHTML = controls.map(c => `
+    <div class="prog-row" style="margin-bottom:16px">
+      <div class="prog-header" style="margin-bottom:8px">
+        <span style="font-size:13px;font-weight:500">${c.label}</span>
+        <span class="mono" id="thresh-val-${c.key}">${thresholds[c.key].toFixed(2)}</span>
+      </div>
+      <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${thresholds[c.key]}"
+        style="width:100%;accent-color:var(--accent)"
+        oninput="thresholds['${c.key}']=parseFloat(this.value);document.getElementById('thresh-val-${c.key}').textContent=parseFloat(this.value).toFixed(2)"/>
+    </div>
+  `).join('');
+}
+
+/* ════════════════════════════════════════
+   API / REPORT
+════════════════════════════════════════ */
+function openApiModal() { document.getElementById('apiModal').style.display = 'flex'; }
+function closeApiModal(demo=false) {
+  document.getElementById('apiModal').style.display = 'none';
+  if (demo) { isDemoMode = true; showToast('Using demo mode for report generation', 'ok'); }
+}
+function saveApiKey() {
+  const k = document.getElementById('apiKeyInput').value.trim();
+  if (!k.startsWith('sk-')) { showToast('Invalid key format', 'crit'); return; }
+  API_KEY = k; isDemoMode = false;
+  document.getElementById('apiStatusLabel').textContent = 'connected';
+  document.getElementById('apiStatusLabel').style.color = 'var(--green)';
+  document.getElementById('apiKeyBtn').className = 'api-key-btn connected';
+  document.getElementById('apiKeyBtn').textContent = '✅ Claude AI Connected';
+  closeApiModal();
+  showToast('✅ Claude AI connected', 'ok');
+}
+
+async function generateReport() {
+  const s = getSimState();
+  const modal = document.getElementById('reportModal');
+  const body = document.getElementById('reportBody');
+  const meta = document.getElementById('reportMeta');
+  modal.style.display = 'flex';
+  body.textContent = '';
+  meta.textContent = `Generated: ${new Date().toLocaleString()} | Model: loan-approval-v3.2 | State: ${modelState.toUpperCase()}`;
+
+  const sev = severityFromRisk(s.overallRisk);
+  const prompt = `You are an AI Governance compliance officer. Generate a formal AI Ethics & Fairness Compliance Report for the following model monitoring data:
+
+MODEL: Loan Approval AI System v3.2
+MONITORING TIMESTAMP: ${new Date().toISOString()}
+MODEL STATE: ${modelState.toUpperCase()}
+
+METRICS SNAPSHOT:
+- Overall Risk Score: ${s.overallRisk}/100 (${sev.toUpperCase()})
+- Accuracy: ${(s.accuracy*100).toFixed(1)}%
+- Bias Score: ${s.biasScore.toFixed(3)} (threshold: ${thresholds.bias})
+- Fairness Index: ${(s.fairnessScore*100).toFixed(1)}%
+- Input Drift: ${s.driftInput.toFixed(3)}
+- Output Drift: ${s.driftOutput.toFixed(3)}
+- Privacy Risk: ${s.privacyRisk.toFixed(3)}
+- Active Alerts: ${alerts.length}
+
+DEMOGRAPHIC DISPARITIES:
+${Object.entries(s.groups).map(([g,d])=>`- ${g}: Approval ${(clamp(d.approval)*100).toFixed(1)}%, TPR ${(clamp(d.tpr)*100).toFixed(1)}%`).join('\n')}
+
+Generate a structured compliance report with sections:
+1. Executive Summary (2-3 sentences)
+2. Risk Assessment & Findings (key issues found)
+3. Regulatory Compliance Status (GDPR, ECOA, Fair Housing Act relevance)
+4. Bias & Fairness Analysis (which groups affected, magnitude)
+5. Data Drift Analysis (what changed, implications)
+6. Privacy Risk Assessment (specific risks identified)
+7. Recommended Immediate Actions (numbered list, prioritized)
+8. Monitoring & Governance Recommendations
+
+Keep each section concise and factual. Use specific numbers from the data provided.`;
+
+  if (!API_KEY || isDemoMode) {
+    // Demo report
+    const demoReport = buildDemoReport(s, sev);
+    body.innerHTML = '';
+    let i = 0;
+    const words = demoReport.split('');
+    const interval = setInterval(() => {
+      if (i >= words.length) { clearInterval(interval); return; }
+      body.textContent += words[i++];
+      body.scrollTop = body.scrollHeight;
+    }, 12);
+    return;
+  }
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 1800,
+        messages: [{ role:'user', content: prompt }],
+        stream: false,
+      }),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    const text = data.content[0].text;
+    body.innerHTML = '';
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i >= text.length) { clearInterval(interval); return; }
+      body.textContent += text[i++];
+      body.scrollTop = body.scrollHeight;
+    }, 8);
+  } catch(e) {
+    body.textContent = buildDemoReport(s, sev);
+    showToast('API error — showing demo report', 'warn');
+  }
+}
+
+function buildDemoReport(s, sev) {
+  const maxGroup = Object.entries(s.groups).sort((a,b) => a[1].approval - b[1].approval)[0];
+  return `AI ETHICS & FAIRNESS COMPLIANCE REPORT
+═══════════════════════════════════════════════════
+Model: Loan Approval AI System v3.2
+Generated: ${new Date().toLocaleString()}
+Classification: ${sev.toUpperCase()} RISK — CONFIDENTIAL
+═══════════════════════════════════════════════════
+
+1. EXECUTIVE SUMMARY
+─────────────────────
+This compliance audit of the Loan Approval AI System v3.2 reveals a ${sev} risk profile with an overall ethical risk index of ${s.overallRisk}/100. ${modelState === 'compromised' ? 'Critical bias drift has been detected across multiple demographic groups, requiring immediate intervention.' : 'The model is operating within acceptable ethical parameters with minor fairness deviations requiring monitoring.'} Active monitoring has flagged ${alerts.length} alert(s) requiring review.
+
+2. RISK ASSESSMENT & FINDINGS
+──────────────────────────────
+• Overall Risk Index: ${s.overallRisk}/100 (${sev.toUpperCase()})
+• Bias Score: ${s.biasScore.toFixed(3)} ${s.biasScore > thresholds.bias ? '⚠ EXCEEDS THRESHOLD' : '✓ Within bounds'}
+• Fairness Index: ${(s.fairnessScore*100).toFixed(1)}% ${s.fairnessScore < 0.85 ? '⚠ DEGRADED' : '✓ Acceptable'}
+• Prediction Accuracy: ${(s.accuracy*100).toFixed(1)}% | Precision: ${(s.precision*100).toFixed(1)}% | Recall: ${(s.recall*100).toFixed(1)}%
+
+3. REGULATORY COMPLIANCE STATUS
+──────────────────────────────────
+• ECOA (Equal Credit Opportunity Act): ${s.biasScore > 0.25 ? '⚠ POTENTIAL VIOLATION — Disparate impact detected' : '✓ Compliant — No significant disparate impact'}
+• Fair Housing Act: ${s.groups['Black']?.approval < 0.6 ? '⚠ AT RISK — Protected class denial rates elevated' : '✓ Compliant'}
+• GDPR Art. 22 (Automated Decision-Making): ${s.privacyRisk > 0.5 ? '⚠ Review required — High privacy inference risk' : '✓ Adequate safeguards in place'}
+• EU AI Act (High-Risk AI): Continuous monitoring active. ${sev === 'critical' ? 'Mandatory incident report required.' : 'Logging requirements met.'}
+
+4. BIAS & FAIRNESS ANALYSIS
+─────────────────────────────
+Demographic Parity Assessment:
+${Object.entries(s.groups).map(([g,d]) => `• ${g}: Approval Rate ${(clamp(d.approval)*100).toFixed(1)}% | TPR ${(clamp(d.tpr)*100).toFixed(1)}%`).join('\n')}
+
+Most Affected Group: ${maxGroup[0]} with ${(clamp(maxGroup[1].approval)*100).toFixed(1)}% approval rate
+Reference Group (White): ${(clamp(s.groups['White']?.approval || 0.72)*100).toFixed(1)}%
+Maximum Disparity: ${(Math.abs(clamp(maxGroup[1].approval) - clamp(s.groups['White']?.approval || 0.72)) * 100).toFixed(1)} percentage points
+
+${s.biasScore > 0.2 ? '⚠ FINDING: Bias score exceeds acceptable threshold. Disparate impact analysis required before continued deployment.' : '✓ Fairness metrics within acceptable bounds for all monitored groups.'}
+
+5. DATA DRIFT ANALYSIS
+──────────────────────
+• Input Feature Drift (PSI): ${s.driftInput.toFixed(3)} — ${s.driftInput > 0.25 ? '⚠ SIGNIFICANT SHIFT detected in input distributions' : '✓ Stable input distributions'}
+• Output Prediction Drift (KL-Div): ${s.driftOutput.toFixed(3)} — ${s.driftOutput > 0.2 ? '⚠ PREDICTION INSTABILITY observed' : '✓ Output distribution stable'}
+• Concept Drift Score: ${s.driftConcept.toFixed(3)} — ${s.driftConcept > 0.2 ? '⚠ Underlying patterns may have changed' : '✓ Concept stability confirmed'}
+
+6. PRIVACY RISK ASSESSMENT
+───────────────────────────
+• Overall Privacy Risk Score: ${(s.privacyRisk*100).toFixed(0)}/100
+• Sensitive Attribute Inference Risk: ${s.privacyRisk > 0.5 ? 'HIGH — Model may be encoding protected attributes via proxy features' : 'LOW — No significant inference risks detected'}
+• Anomalous Access Patterns: ${Math.round(s.privacyRisk * 340 + 20)} high-frequency queries detected (threshold: 200)
+• Data Minimization Status: ${s.privacyRisk > 0.6 ? 'Review required' : 'Adequate'}
+
+7. RECOMMENDED IMMEDIATE ACTIONS
+───────────────────────────────────
+${sev === 'critical' || sev === 'high' ? `1. URGENT: Suspend model deployment and conduct emergency bias audit
+2. Initiate retraining with debiased, balanced training dataset
+3. Implement pre-deployment fairness testing before redeployment
+4. Notify compliance team and legal department of potential ECOA exposure
+5. File internal incident report within 24 hours per governance policy` :
+`1. Continue active monitoring with current alert thresholds
+2. Schedule quarterly bias audit and model card update
+3. Review feature importance for any emerging proxy discrimination
+4. Document current metrics in model registry for audit trail
+5. Brief relevant stakeholders on model health status`}
+
+8. MONITORING & GOVERNANCE RECOMMENDATIONS
+────────────────────────────────────────────
+• Monitoring Frequency: ${sev === 'low' ? 'Daily automated checks — no immediate action required' : 'Increase to real-time monitoring with 1-hour executive alerts'}
+• Retraining Schedule: ${s.biasScore > 0.3 ? 'IMMEDIATE — Bias levels require urgent retraining' : 'Scheduled — Next quarterly cycle'}
+• Stakeholder Review: ${sev === 'critical' ? 'Emergency board-level escalation required' : 'Standard monthly ethics committee review'}
+• Audit Trail: All predictions logged with demographic metadata for retroactive analysis
+• Third-Party Audit: ${sev === 'high' || sev === 'critical' ? 'External audit recommended within 30 days' : 'Annual third-party audit on schedule'}
+
+─────────────────────────────────────────────────
+Report ID: ETHOS-${Date.now().toString(36).toUpperCase()}
+Monitoring System: EthosGuard v2.4
+Next Review: ${new Date(Date.now() + 86400000).toLocaleDateString()}
+─────────────────────────────────────────────────`;
+}
+
+/* ════════════════════════════════════════
+   PDF EXPORT
+════════════════════════════════════════ */
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  const s = getSimState();
+  const sev = severityFromRisk(s.overallRisk);
+  let y = 0;
+
+  // Header
+  doc.setFillColor(7,11,20); doc.rect(0,0,W,28,'F');
+  doc.setTextColor(59,142,234); doc.setFontSize(20); doc.setFont('helvetica','bold');
+  doc.text('EthosGuard', 14, 14);
+  doc.setTextColor(200,210,230); doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text('AI ETHICS & FAIRNESS COMPLIANCE REPORT', 14, 22);
+  doc.setTextColor(100,120,150);
+  doc.text(new Date().toLocaleString(), W-14, 14, {align:'right'});
+  doc.text(`Model: loan-approval-v3.2 | State: ${modelState.toUpperCase()}`, W-14, 22, {align:'right'});
+  y = 36;
+
+  // Risk Score Box
+  const rColor = sev==='low'?[16,185,129]:sev==='medium'?[245,158,11]:sev==='high'?[249,115,22]:[255,45,85];
+  doc.setFillColor(17,25,41); doc.roundedRect(12,y,W-24,18,3,3,'F');
+  doc.setTextColor(...rColor); doc.setFontSize(18); doc.setFont('helvetica','bold');
+  doc.text(`Risk Score: ${s.overallRisk}/100`, W/2,y+10,{align:'center'});
+  doc.setTextColor(100,120,150); doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.text(`Severity: ${sev.toUpperCase()} | ${alerts.length} Active Alerts`, W/2,y+16,{align:'center'});
+  y += 26;
+
+  // Metrics
+  doc.setTextColor(59,142,234); doc.setFontSize(11); doc.setFont('helvetica','bold');
+  doc.text('KEY METRICS', 14, y); y += 6;
+  const metrics2 = [
+    ['Accuracy', `${(s.accuracy*100).toFixed(1)}%`],
+    ['Precision', `${(s.precision*100).toFixed(1)}%`],
+    ['Recall', `${(s.recall*100).toFixed(1)}%`],
+    ['Bias Score', s.biasScore.toFixed(3)],
+    ['Fairness Index', `${(s.fairnessScore*100).toFixed(1)}%`],
+    ['Input Drift', s.driftInput.toFixed(3)],
+  ];
+  metrics2.forEach(([k,v],i) => {
+    const col = i%2===0 ? 14 : W/2;
+    if (i%2===0 && i>0) y += 7;
+    doc.setTextColor(100,120,150); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text(k, col, y);
+    doc.setTextColor(200,210,230); doc.setFontSize(10); doc.setFont('helvetica','bold');
+    doc.text(v, col+50, y, {align:'right'});
+  });
+  y += 12;
+
+  // Report body
+  const reportText = document.getElementById('reportBody')?.textContent;
+  if (reportText) {
+    doc.setTextColor(59,142,234); doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text('COMPLIANCE REPORT', 14, y); y += 6;
+    doc.setTextColor(160,175,200); doc.setFontSize(8.5); doc.setFont('helvetica','normal');
+    const lines = doc.splitTextToSize(reportText, W-28);
+    lines.forEach(line => {
+      if (y > 270) { doc.addPage(); y = 16; }
+      doc.text(line, 14, y); y += 4.5;
+    });
+  } else {
+    // Generate inline
+    doc.setTextColor(160,175,200); doc.setFontSize(9);
+    const body = buildDemoReport(s, sev);
+    const lines = doc.splitTextToSize(body, W-28);
+    lines.forEach(line => {
+      if (y > 270) { doc.addPage(); y = 16; }
+      doc.text(line, 14, y); y += 4.5;
+    });
+  }
+
+  doc.save(`EthosGuard_Compliance_Report_${Date.now()}.pdf`);
+  showToast('📄 PDF exported!', 'ok');
+}
+
+/* ════════════════════════════════════════
+   TOAST
+════════════════════════════════════════ */
+function showToast(msg, type='ok') {
+  const wrap = document.getElementById('toast-wrap');
+  const div = document.createElement('div');
+  div.className = `toast-item ${type === 'crit' ? 'crit' : type === 'warn' ? 'warn' : 'ok'}`;
+  div.textContent = msg;
+  wrap.appendChild(div);
+  setTimeout(() => { div.style.opacity='0'; div.style.transform='translateX(16px)'; div.style.transition='all 0.3s'; setTimeout(()=>div.remove(), 350); }, 3500);
+}
+
+/* ════════════════════════════════════════
+   MAIN TICK
+════════════════════════════════════════ */
+function renderCurrentView() {
+  const s = getSimState();
+  renderKPIs(s);
+  renderRiskGauge(s.overallRisk);
+  renderFairnessPanel(s);
+  renderDriftPanel(s);
+  renderHeatmap('heatmapPanel', s);
+  renderAlertFeed('recentAlertsPanel', 4);
+  renderFairnessTable(s);
+  renderHeatmap('biasHeatmapFull', s);
+  renderDriftCards(s);
+  renderPrivacyPanel(s);
+  renderAlertFeed('alertFeed', 50);
+  renderTimeline('timelineChart', history);
+  renderTimeline('trendChart', history, 200, 800);
+  document.getElementById('inferenceRate').textContent = s.inferenceRate.toLocaleString();
+}
+
+setInterval(() => {
+  tick++;
+  const s = getSimState();
+  // Update history
+  history.bias.push(clamp(s.biasScore));
+  history.drift.push(clamp(Math.max(s.driftInput, s.driftOutput)));
+  history.privacy.push(clamp(s.privacyRisk));
+  history.risk.push(s.overallRisk / 100);
+  if (history.bias.length > MAX_HISTORY) {
+    ['bias','drift','privacy','risk'].forEach(k => history[k].shift());
+  }
+  checkAlerts(s);
+  renderCurrentView();
+  prevState = s;
+}, 2000);
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  renderSettings();
+  const s = getSimState();
+  renderRiskGauge(s.overallRisk);
+  showToast('🛡 EthosGuard initialized — loan-approval-v3.2 under active monitoring', 'ok');
+});
+</script>
+</body>
+</html>
