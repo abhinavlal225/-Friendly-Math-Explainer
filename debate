@@ -1,0 +1,1869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FallacyScope — AI Debate Fallacy Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+/* ══════════════════════════════════════════
+   ROOT & TOKENS
+══════════════════════════════════════════ */
+:root {
+  --bg:          #0a0c10;
+  --bg2:         #0f1218;
+  --bg3:         #141820;
+  --surface:     #1a1f2a;
+  --surface2:    #1f2535;
+  --border:      rgba(255,255,255,0.07);
+  --border2:     rgba(255,255,255,0.12);
+  --text:        #e8edf5;
+  --text2:       #9aa3b5;
+  --text3:       #5a6478;
+  --accent:      #4f9cf0;
+  --accent-glow: rgba(79,156,240,0.25);
+
+  /* Fallacy palette */
+  --f-strawman:    #f97316;
+  --f-adhom:       #ef4444;
+  --f-slippery:    #a855f7;
+  --f-falsedil:    #3b82f6;
+  --f-circular:    #14b8a6;
+  --f-hasty:       #eab308;
+  --f-authority:   #ec4899;
+  --f-general:     #6b7280;
+
+  --score-good:    #22c55e;
+  --score-mid:     #f59e0b;
+  --score-bad:     #ef4444;
+
+  --radius:    12px;
+  --radius-lg: 18px;
+}
+.light {
+  --bg:        #f4f5f8;
+  --bg2:       #eceef3;
+  --bg3:       #e4e6ed;
+  --surface:   #ffffff;
+  --surface2:  #f9fafc;
+  --border:    rgba(0,0,0,0.08);
+  --border2:   rgba(0,0,0,0.14);
+  --text:      #111827;
+  --text2:     #4b5563;
+  --text3:     #9ca3af;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; }
+body {
+  font-family: 'Outfit', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ══════════════════════════════════════════
+   LAYOUT
+══════════════════════════════════════════ */
+.app-wrapper {
+  display: grid;
+  grid-template-rows: 56px 1fr;
+  grid-template-columns: 1fr 340px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Header ─── */
+header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px 0 24px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  z-index: 50;
+}
+.logo-wrap { display: flex; align-items: center; gap: 10px; }
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.logo-text {
+  font-family: 'Playfair Display', serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.logo-text span { color: var(--accent); }
+.logo-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+.header-actions { display: flex; align-items: center; gap: 10px; }
+.hbtn {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text2);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  transition: all 0.15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.hbtn:hover { border-color: var(--accent); color: var(--text); }
+.hbtn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.hbtn.primary:hover { opacity: 0.88; }
+.api-indicator {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11px;
+  color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+}
+.api-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: background 0.3s;
+}
+.api-dot.connected { background: var(--score-good); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+
+/* ─── Main Panel ─── */
+.main-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+/* ─── Tabs ─── */
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+.tab {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab:hover:not(.active) { color: var(--text2); }
+
+/* ─── Tab Content ─── */
+.tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.tab-content.active { display: flex; }
+
+/* ══ EDITOR TAB ══ */
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.toolbar-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+.sample-btn {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: 'Outfit', sans-serif;
+  transition: all 0.15s;
+}
+.sample-btn:hover { border-color: var(--accent); color: var(--accent); }
+.toolbar-sep { width: 1px; height: 18px; background: var(--border2); }
+.mic-btn {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  transition: all 0.15s;
+  font-family: 'Outfit', sans-serif;
+}
+.mic-btn:hover { border-color: #ef4444; color: #ef4444; }
+.mic-btn.recording { background: rgba(239,68,68,0.1); border-color: #ef4444; color: #ef4444; animation: micPulse 1s infinite; }
+@keyframes micPulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+.mic-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.editor-body {
+  flex: 1;
+  display: grid;
+  grid-template-rows: 1fr 2px 1fr;
+  overflow: hidden;
+  min-height: 0;
+}
+.editor-input-wrap {
+  position: relative;
+  overflow: hidden;
+}
+textarea#debateInput {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 20px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+  caret-color: var(--accent);
+}
+textarea::placeholder { color: var(--text3); }
+.char-count {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+}
+.resize-handle { background: var(--border); cursor: row-resize; }
+.output-wrap {
+  overflow-y: auto;
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.output-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  text-align: center;
+}
+.output-placeholder .big-icon { font-size: 40px; opacity: 0.3; }
+
+/* Highlighted text spans */
+.fallacy-mark {
+  border-radius: 3px;
+  padding: 1px 0;
+  cursor: pointer;
+  position: relative;
+  transition: opacity 0.2s;
+}
+.fallacy-mark:hover { opacity: 0.8; }
+
+/* ══ ARGUMENT MAP TAB ══ */
+#mapCanvas {
+  flex: 1;
+  width: 100%;
+  display: block;
+}
+
+/* ══ STATS TAB ══ */
+.stats-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+.stat-val {
+  font-family: 'Playfair Display', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+.stat-lbl {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.freq-chart { margin-top: 16px; }
+.freq-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.freq-name {
+  min-width: 130px;
+  color: var(--text2);
+  font-weight: 500;
+}
+.freq-bar-wrap {
+  flex: 1;
+  background: var(--surface);
+  border-radius: 3px;
+  height: 8px;
+  overflow: hidden;
+}
+.freq-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+.freq-count {
+  min-width: 20px;
+  text-align: right;
+  color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+/* ══════════════════════════════════════════
+   RIGHT PANEL
+══════════════════════════════════════════ */
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+/* ─── Score Gauge ─── */
+.score-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.score-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.score-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+.score-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1;
+  transition: color 0.5s;
+}
+.score-label { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.score-bar-wrap {
+  height: 6px;
+  background: var(--surface);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.score-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.34,1.56,0.64,1), background 0.5s;
+  background: var(--score-good);
+}
+.score-breakdown {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+}
+.score-bd-item { display: flex; align-items: center; gap: 4px; }
+.score-bd-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* ─── Analysis Feed ─── */
+.analysis-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.analysis-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.analysis-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+.analysis-count {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: var(--text2);
+}
+.analysis-feed { flex: 1; overflow-y: auto; padding: 12px; }
+.fallacy-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--f-general);
+  cursor: pointer;
+  transition: all 0.15s;
+  animation: slideIn 0.3s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fallacy-card:hover { border-color: var(--border2); transform: translateX(-2px); }
+.fallacy-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.fallacy-name {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+.fallacy-confidence {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--bg3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.fallacy-quote {
+  font-size: 11px;
+  color: var(--text3);
+  font-style: italic;
+  border-left: 2px solid var(--border2);
+  padding-left: 8px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.fallacy-explanation {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+.fallacy-correction {
+  font-size: 11px;
+  background: rgba(79,156,240,0.07);
+  border: 1px solid rgba(79,156,240,0.2);
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: var(--accent);
+  line-height: 1.5;
+}
+.fallacy-correction::before {
+  content: '💡 ';
+}
+.fallacy-card .expand-toggle {
+  text-align: right;
+  font-size: 10px;
+  color: var(--text3);
+  cursor: pointer;
+  margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.fallacy-card .collapsible { display: none; }
+.fallacy-card.expanded .collapsible { display: block; }
+.fallacy-card.expanded .expand-toggle::after { content: ' ↑ less'; }
+.fallacy-card:not(.expanded) .expand-toggle::after { content: ' ↓ more'; }
+
+/* Empty feed state */
+.empty-feed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  gap: 10px;
+  color: var(--text3);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+}
+.empty-feed .ef-icon { font-size: 32px; opacity: 0.3; }
+
+/* ─── Reference Panel ─── */
+.reference-section {
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.reference-toggle {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: color 0.15s;
+}
+.reference-toggle:hover { color: var(--text2); }
+.reference-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.reference-body.open { max-height: 300px; overflow-y: auto; }
+.ref-item {
+  padding: 9px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ref-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; margin-top: 4px; }
+.ref-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.ref-desc { font-size: 11px; color: var(--text3); line-height: 1.5; }
+
+/* ══════════════════════════════════════════
+   LOADING / ANALYZING STATE
+══════════════════════════════════════════ */
+.analyzing-overlay {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid rgba(79,156,240,0.3);
+  border-radius: 6px;
+  padding: 5px 12px;
+}
+.analyzing-overlay.visible { display: flex; }
+.analyzing-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  animation: blink 0.8s infinite;
+}
+.analyzing-dot:nth-child(2) { animation-delay: 0.15s; }
+.analyzing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes blink { 0%,80%,100% { opacity:0.2; } 40% { opacity:1; } }
+
+/* ══════════════════════════════════════════
+   API KEY MODAL
+══════════════════════════════════════════ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  max-width: 480px;
+  width: 90%;
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from { opacity:0; transform: scale(0.95) translateY(-8px); } }
+.modal-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.modal-sub { font-size: 13px; color: var(--text2); margin-bottom: 24px; line-height: 1.6; }
+.modal-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+.modal-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 20px;
+}
+.modal-input:focus { border-color: var(--accent); }
+.modal-input::placeholder { color: var(--text3); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-note {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 12px;
+  line-height: 1.6;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+/* ══════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════ */
+#toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  opacity: 0;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 13px;
+  z-index: 300;
+  transition: all 0.3s;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+#toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ══════════════════════════════════════════
+   STREAMING CURSOR
+══════════════════════════════════════════ */
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  background: var(--accent);
+  margin-left: 2px;
+  animation: cursorBlink 0.7s infinite;
+  vertical-align: text-bottom;
+}
+@keyframes cursorBlink { 0%,50% { opacity:1; } 51%,100% { opacity:0; } }
+
+/* ══════════════════════════════════════════
+   ARGUMENT MAP
+══════════════════════════════════════════ */
+.map-wrap { flex: 1; position: relative; overflow: hidden; }
+.map-empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 12px; color: var(--text3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; text-align: center;
+}
+.map-empty .me-icon { font-size: 48px; opacity: 0.2; }
+
+/* ══════════════════════════════════════════
+   PREMISE BREAKDOWN
+══════════════════════════════════════════ */
+.premise-section {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg2);
+  flex-shrink: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.premise-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text3);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.argument-chain { display: flex; flex-direction: column; gap: 8px; }
+.arg-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.arg-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.arg-badge.premise { background: rgba(79,156,240,0.15); color: var(--accent); }
+.arg-badge.conclusion { background: rgba(34,197,94,0.15); color: var(--score-good); }
+.arg-badge.support { background: rgba(234,179,8,0.12); color: var(--score-mid); }
+.arg-text { color: var(--text2); }
+
+/* ══════════════════════════════════════════
+   RESPONSIVE
+══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .app-wrapper { grid-template-columns: 1fr; grid-template-rows: 56px 1fr; }
+  .right-panel { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- API KEY MODAL -->
+<div class="modal-backdrop" id="apiModal">
+  <div class="modal">
+    <div class="modal-title">Connect Claude AI 🔬</div>
+    <div class="modal-sub">FallacyScope uses Claude to deliver deep, nuanced fallacy analysis with explanations and corrections tailored to your exact argument.</div>
+    <div class="modal-label">Anthropic API Key</div>
+    <input class="modal-input" id="apiKeyInput" type="password" placeholder="sk-ant-api03-…" autocomplete="off"/>
+    <div class="modal-actions">
+      <button class="hbtn" onclick="closeModal(true)">Demo Mode (no AI)</button>
+      <button class="hbtn primary" onclick="saveApiKey()">🔗 Connect & Analyze</button>
+    </div>
+    <div class="modal-note">🔒 Your key is stored only in your browser's memory and never sent anywhere except the Anthropic API. You can also use Demo Mode with built-in fallacy patterns.</div>
+  </div>
+</div>
+
+<div class="app-wrapper">
+  <!-- ══ HEADER ══ -->
+  <header>
+    <div class="logo-wrap">
+      <div class="logo-icon">⚖</div>
+      <div>
+        <div class="logo-text">Fallacy<span>Scope</span></div>
+      </div>
+      <div class="logo-tag">AI v2.0</div>
+    </div>
+    <div class="header-actions">
+      <div class="api-indicator">
+        <div class="api-dot" id="apiDot"></div>
+        <span id="apiLabel">disconnected</span>
+      </div>
+      <div class="toolbar-sep" style="height:20px;width:1px;background:var(--border);"></div>
+      <button class="hbtn" onclick="openModal()">🔑 API Key</button>
+      <button class="hbtn" onclick="exportPDF()">⬇ Export PDF</button>
+      <button class="hbtn" onclick="toggleTheme()">🌗</button>
+    </div>
+  </header>
+
+  <!-- ══ MAIN PANEL ══ -->
+  <div class="main-panel">
+    <div class="tab-bar">
+      <div class="tab active" data-tab="editor" onclick="switchTab('editor')">📝 Debate Input</div>
+      <div class="tab" data-tab="map" onclick="switchTab('map')">🗺 Argument Map</div>
+      <div class="tab" data-tab="stats" onclick="switchTab('stats')">📊 Statistics</div>
+    </div>
+
+    <!-- Editor Tab -->
+    <div class="tab-content active" id="tab-editor">
+      <div class="editor-area">
+        <div class="editor-toolbar">
+          <span class="toolbar-label">Samples:</span>
+          <button class="sample-btn" onclick="loadSample('politics')">🏛 Politics</button>
+          <button class="sample-btn" onclick="loadSample('climate')">🌍 Climate</button>
+          <button class="sample-btn" onclick="loadSample('tech')">💻 Tech Ethics</button>
+          <button class="sample-btn" onclick="loadSample('vaccine')">💉 Health</button>
+          <button class="sample-btn" onclick="loadSample('economy')">📈 Economy</button>
+          <div class="toolbar-sep"></div>
+          <button class="mic-btn" id="micBtn" onclick="toggleMic()">
+            <div class="mic-dot"></div>
+            <span id="micLabel">Mic Off</span>
+          </button>
+          <div class="toolbar-sep"></div>
+          <button class="sample-btn" onclick="analyzeDebate()" style="background:rgba(79,156,240,0.1);border-color:rgba(79,156,240,0.3);color:var(--accent);font-weight:600;">⚡ Analyze</button>
+          <button class="sample-btn" onclick="clearAll()" style="color:var(--text3);">✕ Clear</button>
+        </div>
+
+        <div class="editor-body">
+          <!-- Input -->
+          <div class="editor-input-wrap">
+            <textarea id="debateInput" placeholder="Paste your debate text, speech transcript, or argument here…
+
+Try one of the sample debates above, or type your own argument to detect logical fallacies in real-time.
+
+Keyboard shortcut: Ctrl/Cmd + Enter to analyze"></textarea>
+            <span class="char-count" id="charCount">0 chars</span>
+            <div class="analyzing-overlay" id="analyzingOverlay">
+              <div class="analyzing-dot"></div>
+              <div class="analyzing-dot"></div>
+              <div class="analyzing-dot"></div>
+              <span>Analyzing argument structure…</span>
+            </div>
+          </div>
+
+          <div class="resize-handle" id="resizeHandle"></div>
+
+          <!-- Output (annotated) -->
+          <div class="output-wrap" id="outputWrap">
+            <div class="output-placeholder" id="outputPlaceholder">
+              <div class="big-icon">🔍</div>
+              <div>Annotated analysis will appear here<br/>after you run detection.</div>
+            </div>
+            <div id="annotatedOutput" style="display:none; font-size:14px; line-height:1.9;"></div>
+          </div>
+        </div>
+
+        <!-- Premise Breakdown -->
+        <div class="premise-section" id="premiseSection" style="display:none;">
+          <div class="premise-title">Argument Structure</div>
+          <div class="argument-chain" id="argumentChain"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Tab -->
+    <div class="tab-content" id="tab-map">
+      <div class="map-wrap">
+        <canvas id="mapCanvas"></canvas>
+        <div class="map-empty" id="mapEmpty">
+          <div class="me-icon">🕸</div>
+          <div>Argument map generates after analysis.<br/>Run detection on the Debate Input tab first.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats Tab -->
+    <div class="tab-content" id="tab-stats">
+      <div class="stats-panel">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-val" id="statTotal">0</div>
+            <div class="stat-lbl">Total Fallacies</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="statScore" style="color:var(--score-good)">—</div>
+            <div class="stat-lbl">Logic Score</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="statWords">0</div>
+            <div class="stat-lbl">Words Analyzed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-val" id="statDensity">0%</div>
+            <div class="stat-lbl">Fallacy Density</div>
+          </div>
+        </div>
+
+        <div style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; margin-bottom:14px;">Frequency Breakdown</div>
+        <div class="freq-chart" id="freqChart">
+          <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">No analysis run yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RIGHT PANEL ══ -->
+  <div class="right-panel">
+    <!-- Score -->
+    <div class="score-section">
+      <div class="score-header">
+        <div class="score-title">Logic Integrity Score</div>
+        <div>
+          <div class="score-num" id="scoreNum" style="color:var(--text3)">—</div>
+          <div class="score-label" id="scoreLabel">awaiting analysis</div>
+        </div>
+      </div>
+      <div class="score-bar-wrap">
+        <div class="score-bar" id="scoreBar" style="width:0%"></div>
+      </div>
+      <div class="score-breakdown">
+        <div class="score-bd-item"><div class="score-bd-dot" style="background:var(--score-good)"></div>Solid</div>
+        <div class="score-bd-item"><div class="score-bd-dot" style="background:var(--score-mid)"></div>Needs work</div>
+        <div class="score-bd-item"><div class="score-bd-dot" style="background:var(--score-bad)"></div>Flawed</div>
+      </div>
+    </div>
+
+    <!-- Fallacy Feed -->
+    <div class="analysis-section">
+      <div class="analysis-header">
+        <div class="analysis-title">Detected Fallacies</div>
+        <div class="analysis-count" id="fallacyCount">0 found</div>
+      </div>
+      <div class="analysis-feed" id="analysisFeed">
+        <div class="empty-feed">
+          <div class="ef-icon">📋</div>
+          <div>No fallacies detected yet.<br/>Paste text and run analysis.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reference -->
+    <div class="reference-section">
+      <div class="reference-toggle" onclick="toggleReference()">
+        📚 Fallacy Reference
+        <span id="refChevron">▼</span>
+      </div>
+      <div class="reference-body" id="referenceBody">
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-strawman)"></div>
+          <div><div class="ref-name">Strawman</div><div class="ref-desc">Misrepresenting someone's argument to make it easier to attack</div></div>
+        </div>
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-adhom)"></div>
+          <div><div class="ref-name">Ad Hominem</div><div class="ref-desc">Attacking the person instead of their argument</div></div>
+        </div>
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-slippery)"></div>
+          <div><div class="ref-name">Slippery Slope</div><div class="ref-desc">Claiming one event will lead to extreme consequences without justification</div></div>
+        </div>
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-falsedil)"></div>
+          <div><div class="ref-name">False Dilemma</div><div class="ref-desc">Presenting only two options when more exist</div></div>
+        </div>
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-circular)"></div>
+          <div><div class="ref-name">Circular Reasoning</div><div class="ref-desc">Using the conclusion as a premise in the argument</div></div>
+        </div>
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-hasty)"></div>
+          <div><div class="ref-name">Hasty Generalization</div><div class="ref-desc">Drawing broad conclusions from limited examples</div></div>
+        </div>
+        <div class="ref-item">
+          <div class="ref-dot" style="background:var(--f-authority)"></div>
+          <div><div class="ref-name">Appeal to Authority</div><div class="ref-desc">Using authority as evidence without proper justification</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════ */
+let API_KEY = '';
+let isDemoMode = false;
+let detectedFallacies = [];
+let isAnalyzing = false;
+let micRecognition = null;
+let isMicOn = false;
+let argumentStructure = [];
+let debounceTimer = null;
+
+const FALLACY_COLORS = {
+  'Strawman':             { color: '#f97316', bg: 'rgba(249,115,22,0.18)' },
+  'Ad Hominem':           { color: '#ef4444', bg: 'rgba(239,68,68,0.18)' },
+  'Slippery Slope':       { color: '#a855f7', bg: 'rgba(168,85,247,0.18)' },
+  'False Dilemma':        { color: '#3b82f6', bg: 'rgba(59,130,246,0.18)' },
+  'Circular Reasoning':   { color: '#14b8a6', bg: 'rgba(20,184,166,0.18)' },
+  'Hasty Generalization': { color: '#eab308', bg: 'rgba(234,179,8,0.18)' },
+  'Appeal to Authority':  { color: '#ec4899', bg: 'rgba(236,72,153,0.18)' },
+};
+function fallacyColor(name) { return FALLACY_COLORS[name] || { color: '#6b7280', bg: 'rgba(107,114,128,0.15)' }; }
+
+/* ════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('debateInput').addEventListener('input', onInput);
+  document.getElementById('debateInput').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') analyzeDebate();
+  });
+  setupResizeHandle();
+  renderStats([]);
+});
+
+function onInput(e) {
+  const len = e.target.value.length;
+  document.getElementById('charCount').textContent = len + ' chars';
+  clearTimeout(debounceTimer);
+  if (len > 20) debounceTimer = setTimeout(() => analyzeDebate(true), 2500);
+}
+
+/* ════════════════════════════════════════════
+   MODAL
+════════════════════════════════════════════ */
+function openModal() { document.getElementById('apiModal').style.display = 'flex'; }
+function closeModal(demo = false) {
+  document.getElementById('apiModal').style.display = 'none';
+  if (demo) { isDemoMode = true; setApiStatus(false); showToast('Running in Demo Mode — using pattern matching'); }
+}
+function saveApiKey() {
+  const k = document.getElementById('apiKeyInput').value.trim();
+  if (!k.startsWith('sk-')) { showToast('❌ Invalid key format'); return; }
+  API_KEY = k;
+  isDemoMode = false;
+  setApiStatus(true);
+  closeModal();
+  showToast('✅ Connected to Claude AI');
+}
+function setApiStatus(on) {
+  document.getElementById('apiDot').className = 'api-dot' + (on ? ' connected' : '');
+  document.getElementById('apiLabel').textContent = on ? 'claude connected' : (isDemoMode ? 'demo mode' : 'disconnected');
+}
+
+/* ════════════════════════════════════════════
+   SAMPLE DEBATES
+════════════════════════════════════════════ */
+const SAMPLES = {
+  politics: `You either support the new tax reform or you hate working families. There's no middle ground here. Senator Johnson has been divorced twice, so why would we trust his economic policies? Besides, my grandfather always said that high taxes destroy nations, and he was a very wise man. If we raise the minimum wage even slightly, businesses will start closing, then unemployment will skyrocket, then the entire economy will collapse. Everyone knows that government spending is wasteful — I heard two people complaining about it just last week, so clearly this is a universal problem. The senator's own bill says it's a good bill, which is proof that it's good legislation.`,
+
+  climate: `Climate scientists can't even predict next week's weather accurately, so how can we trust their 100-year predictions? Dr. Smith, who has a PhD in chemistry, says climate change isn't real, and we should trust qualified experts. Either we completely ban all fossil fuels immediately or we accept that civilization will end — those are our only choices. My opponents claim we should do nothing about the environment, but obviously destroying our planet is not acceptable. Look, I met someone who drives a big truck and their town had record cold temperatures, so clearly global warming is a myth. We've always had climate changes throughout history, therefore the current changes must also be natural.`,
+
+  tech: `Only someone who doesn't understand technology would oppose AI regulation. My colleague who proposed these restrictions clearly has a personal grudge against tech companies. If we allow any AI in schools, students will stop thinking for themselves, then we'll have a generation of mindless drones, and human intelligence will become extinct. Either we embrace full AI automation or we fall behind every other nation — there's no other path forward. Tech billionaires support this new framework, so it must be the right approach for society. We know this surveillance system is secure because the company says it's secure.`,
+
+  vaccine: `Dr. Peterson has received funding from pharmaceutical companies, so obviously his research on vaccine safety cannot be trusted. If children get this vaccine, the government will want to track them next, then control their thoughts, and eventually establish total mind control. You're either pro-vaccine or you want children to suffer from preventable diseases — pick a side. Three people in my neighborhood had bad reactions, so clearly all vaccines are dangerous for everyone. The CDC says vaccines are safe, and the CDC is a reliable institution, therefore vaccines are safe — which is exactly why the CDC says so. Real parents who care about their children would never inject them with unknown chemicals.`,
+
+  economy: `Anyone who questions free market capitalism simply wants to destroy freedom and prosperity. My economics professor — who once worked for a major bank — says deregulation always helps the economy, so that settles it. If we implement any new environmental regulations on businesses, they'll all move overseas, then millions will lose jobs, then our cities will become ghost towns. I spoke to three small business owners who opposed the new tax, so it's clear that all entrepreneurs hate this policy. You're either for economic growth or you're for poverty — choose wisely. The evidence shows deregulation works because economies in deregulated markets tend to grow, which proves that deregulation is the right policy for growth.`,
+};
+
+function loadSample(key) {
+  document.getElementById('debateInput').value = SAMPLES[key] || '';
+  document.getElementById('charCount').textContent = (SAMPLES[key]?.length || 0) + ' chars';
+  setTimeout(() => analyzeDebate(), 100);
+}
+
+/* ════════════════════════════════════════════
+   MIC / SPEECH-TO-TEXT
+════════════════════════════════════════════ */
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('❌ Speech recognition not supported in this browser'); return;
+  }
+  if (isMicOn) { stopMic(); return; }
+  startMic();
+}
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  micRecognition = new SR();
+  micRecognition.continuous = true;
+  micRecognition.interimResults = true;
+  micRecognition.lang = 'en-US';
+  let base = document.getElementById('debateInput').value;
+  micRecognition.onresult = e => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    document.getElementById('debateInput').value = base + final + interim;
+    if (final) base += final;
+  };
+  micRecognition.onend = () => { if (isMicOn) micRecognition.start(); };
+  micRecognition.start();
+  isMicOn = true;
+  document.getElementById('micBtn').classList.add('recording');
+  document.getElementById('micLabel').textContent = 'Recording…';
+  showToast('🎙 Microphone active — speak your argument');
+}
+function stopMic() {
+  if (micRecognition) { micRecognition.stop(); micRecognition = null; }
+  isMicOn = false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micLabel').textContent = 'Mic Off';
+  showToast('Microphone stopped');
+  if (document.getElementById('debateInput').value.trim()) analyzeDebate();
+}
+
+/* ════════════════════════════════════════════
+   FALLACY DETECTION — DEMO MODE
+════════════════════════════════════════════ */
+const DEMO_PATTERNS = [
+  {
+    name: 'Ad Hominem',
+    patterns: [/\b(stupid|idiot|fool|moron|incompetent|corrupt|liar|hypocrite)\b/gi,
+               /who (would|could) trust (him|her|them|this person)/gi,
+               /(twice|three times) (divorced|arrested|fired)/gi,
+               /clearly has a personal grudge/gi],
+    explanation: 'This attacks the person\'s character rather than addressing the substance of their argument.',
+    problem: 'Personal character flaws, even if true, don\'t make an argument logically invalid.',
+    correction: 'Address the specific claims or evidence presented in the argument instead.'
+  },
+  {
+    name: 'False Dilemma',
+    patterns: [/either.+or.+(there'?s? no|that'?s? (it|all)|no other|only choice|must)/gi,
+               /you'?re? either.+or/gi,
+               /only two (options|choices|paths|ways)/gi,
+               /no middle ground/gi,
+               /(choose|pick) (a side|wisely|carefully)$/gi],
+    explanation: 'This presents only two extreme options as if no alternatives exist.',
+    problem: 'Most complex issues have a spectrum of possible positions and solutions.',
+    correction: 'Acknowledge the range of possible positions and the nuance between extremes.'
+  },
+  {
+    name: 'Slippery Slope',
+    patterns: [/(if|once|when) .+, (then )?.+, (then )?.+will (happen|occur|follow|collapse|end)/gi,
+               /will (lead to|result in|cause).+which will.+then/gi,
+               /next (thing|step).+then.+eventually/gi,
+               /(start|begin) .+ then .+ then/gi],
+    explanation: 'This assumes a chain of extreme consequences from an initial action without justification.',
+    problem: 'Each step in such a chain requires its own evidence — they don\'t follow automatically.',
+    correction: 'Evaluate each step independently with evidence rather than assuming inevitability.'
+  },
+  {
+    name: 'Appeal to Authority',
+    patterns: [/\b(professor|doctor|dr\.|expert|scientist|ceo|president|general)\b .{0,30} (says?|claims?|states?|believes?)/gi,
+               /according to (an? |the )?(expert|authority|specialist)/gi,
+               /(phd|md|degree|qualification).{0,40}(proves?|confirms?|settles?)/gi,
+               /who (worked for|studied at).{0,30} (so|therefore|thus)/gi],
+    explanation: 'This uses an authority figure\'s opinion as primary evidence without additional support.',
+    problem: 'Credentials don\'t automatically make claims true — even experts can be wrong or biased.',
+    correction: 'Cite the specific evidence or data the authority is basing their claims on.'
+  },
+  {
+    name: 'Hasty Generalization',
+    patterns: [/(i (met|know|heard|spoke to|talked to) (\w+ )?(people|person|someone|one)).{0,60}(clearly|so|therefore|obviously|all)/gi,
+               /(everyone|nobody|all|no one) (knows?|thinks?|says?|believes?)/gi,
+               /(\d+|three|two|several) (people|examples?|cases?|instances?).{0,40}(clearly|prove|show|means?|therefore)/gi,
+               /is a (universal|widespread|common) problem/gi],
+    explanation: 'This draws a broad conclusion from a small, unrepresentative sample.',
+    problem: 'A few examples cannot justify universal claims without representative data.',
+    correction: 'Use statistically valid data and acknowledge the limits of your examples.'
+  },
+  {
+    name: 'Circular Reasoning',
+    patterns: [/because.{5,60}(is|are) (good|true|correct|right|valid).+which (proves?|shows?|means?|is why)/gi,
+               /it.?s (true|correct|right) because.{3,40}(is|are) (always|obviously|clearly) (true|correct|right)/gi,
+               /we know.{5,50}because.{5,50}(says? so|tells? us|confirms?)/gi,
+               /the (bill|policy|law|plan) says? it.?s (good|effective|correct).+proof/gi],
+    explanation: 'The conclusion is used as a premise, making the argument self-referential.',
+    problem: 'An argument that relies on its own conclusion provides no actual independent support.',
+    correction: 'Provide independent evidence or reasoning that supports the conclusion from the outside.'
+  },
+  {
+    name: 'Strawman',
+    patterns: [/my (opponents?|critics?|detractors?).{0,60}(clearly|obviously|want to|would|claim)/gi,
+               /(claim|say|suggest|propose).{0,80}(obviously|clearly) (not acceptable|destroying|terrible|extreme)/gi,
+               /what (he|she|they).?re? really (saying|proposing|suggesting) is/gi,
+               /so you.?re? (saying|claiming|suggesting) (we should|that).{0,60}\?/gi],
+    explanation: 'This misrepresents the opponent\'s argument as something more extreme and easier to attack.',
+    problem: 'Attacking a distorted version of an argument avoids engaging with the real position.',
+    correction: 'Steelman the opponent\'s actual position before critiquing it accurately.'
+  },
+];
+
+function detectFallaciesDemo(text) {
+  const results = [];
+  const usedSpans = new Set();
+
+  for (const def of DEMO_PATTERNS) {
+    for (const pat of def.patterns) {
+      const regex = new RegExp(pat.source, pat.flags);
+      let match;
+      while ((match = regex.exec(text)) !== null) {
+        const start = match.index;
+        const end = start + match[0].length;
+        const key = `${start}-${end}`;
+        if (usedSpans.has(key)) continue;
+        usedSpans.add(key);
+        results.push({
+          name: def.name,
+          quote: match[0],
+          start, end,
+          confidence: Math.floor(72 + Math.random() * 24),
+          explanation: def.explanation,
+          problem: def.problem,
+          correction: def.correction,
+        });
+      }
+    }
+  }
+  results.sort((a,b) => a.start - b.start);
+  return results;
+}
+
+/* ════════════════════════════════════════════
+   ARGUMENT STRUCTURE — DEMO
+════════════════════════════════════════════ */
+function extractArgumentStructure(text) {
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+  const chain = [];
+  const premiseWords = /\b(because|since|given that|as|for|due to|owing to)\b/i;
+  const conclusionWords = /\b(therefore|thus|so|hence|consequently|it follows that|clearly|obviously|we can conclude)\b/i;
+  const supportWords = /\b(furthermore|moreover|additionally|also|in addition|and)\b/i;
+
+  sentences.slice(0, 8).forEach(s => {
+    const t = s.trim();
+    if (!t || t.length < 15) return;
+    if (conclusionWords.test(t)) chain.push({ type: 'conclusion', text: t });
+    else if (premiseWords.test(t)) chain.push({ type: 'premise', text: t });
+    else if (supportWords.test(t)) chain.push({ type: 'support', text: t });
+    else if (chain.length === 0) chain.push({ type: 'premise', text: t });
+    else chain.push({ type: 'support', text: t });
+  });
+  if (chain.length > 0 && chain[chain.length - 1].type !== 'conclusion') {
+    chain[chain.length - 1].type = 'conclusion';
+  }
+  return chain;
+}
+
+/* ════════════════════════════════════════════
+   CLAUDE AI ANALYSIS
+════════════════════════════════════════════ */
+async function analyzeWithClaude(text) {
+  const systemPrompt = `You are an expert logician and debate analyst specializing in identifying logical fallacies. Analyze the provided debate text and identify ALL logical fallacies present.
+
+For each fallacy, respond with a JSON array. Each item must have:
+- "name": exact fallacy name (one of: Strawman, Ad Hominem, Slippery Slope, False Dilemma, Circular Reasoning, Hasty Generalization, Appeal to Authority)
+- "quote": the EXACT verbatim text excerpt containing the fallacy (keep it short, 5-30 words)
+- "confidence": integer 60-99 representing your confidence percentage
+- "explanation": 1-2 sentence explanation of WHY this is the specific fallacy
+- "problem": 1 sentence on why this weakens the argument
+- "correction": 1-2 sentence suggested logical correction
+
+Also include in your response a "score" key (0-100 integer) rating the overall logical soundness of the argument (100 = perfectly logical, 0 = completely fallacious).
+
+And include an "argumentStructure" array of up to 6 objects with:
+- "type": "premise", "conclusion", or "support"  
+- "text": a short paraphrase of that argument component
+
+Respond ONLY with valid JSON: {"fallacies": [...], "score": N, "argumentStructure": [...]}`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: `Analyze this debate text for logical fallacies:\n\n"${text}"` }],
+    }),
+  });
+
+  if (!response.ok) throw new Error(`API error ${response.status}`);
+  const data = await response.json();
+  const raw = data.content[0].text.trim().replace(/```json|```/g, '').trim();
+  return JSON.parse(raw);
+}
+
+/* ════════════════════════════════════════════
+   MAIN ANALYZE FUNCTION
+════════════════════════════════════════════ */
+async function analyzeDebate(auto = false) {
+  const text = document.getElementById('debateInput').value.trim();
+  if (!text || text.length < 20) {
+    if (!auto) showToast('Please enter at least 20 characters of debate text');
+    return;
+  }
+  if (isAnalyzing) return;
+  if (!API_KEY && !isDemoMode) { openModal(); return; }
+
+  isAnalyzing = true;
+  document.getElementById('analyzingOverlay').classList.add('visible');
+
+  try {
+    let fallacies = [];
+    let score = 100;
+
+    if (isDemoMode || !API_KEY) {
+      await fakeDelay(1200);
+      fallacies = detectFallaciesDemo(text);
+      argumentStructure = extractArgumentStructure(text);
+      score = Math.max(10, 100 - fallacies.length * 12 - Math.floor(Math.random() * 8));
+    } else {
+      const result = await analyzeWithClaude(text);
+      fallacies = (result.fallacies || []).map(f => ({
+        ...f,
+        start: text.toLowerCase().indexOf(f.quote?.toLowerCase()?.substring(0, 20) || '') ,
+        end: 0,
+      })).filter(f => f.start >= 0);
+      // Resolve end positions
+      fallacies.forEach(f => { f.end = f.start + (f.quote?.length || 0); });
+      score = result.score ?? Math.max(10, 100 - fallacies.length * 12);
+      argumentStructure = result.argumentStructure || extractArgumentStructure(text);
+    }
+
+    detectedFallacies = fallacies;
+    renderResults(text, fallacies, score);
+
+  } catch (e) {
+    showToast('⚠️ Analysis error: ' + e.message);
+    // Fallback to demo
+    const fallacies = detectFallaciesDemo(text);
+    detectedFallacies = fallacies;
+    const score = Math.max(10, 100 - fallacies.length * 12);
+    renderResults(text, fallacies, score);
+  }
+
+  isAnalyzing = false;
+  document.getElementById('analyzingOverlay').classList.remove('visible');
+}
+
+function fakeDelay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ════════════════════════════════════════════
+   RENDER RESULTS
+════════════════════════════════════════════ */
+function renderResults(text, fallacies, score) {
+  // Score
+  updateScore(score, fallacies.length);
+
+  // Annotated output
+  renderAnnotatedText(text, fallacies);
+
+  // Fallacy feed
+  renderFallacyFeed(fallacies);
+
+  // Premise breakdown
+  renderArgumentStructure(argumentStructure);
+
+  // Stats
+  renderStats(fallacies, text, score);
+
+  // Argument map
+  drawArgumentMap(argumentStructure, fallacies);
+}
+
+/* ─ Score ─ */
+function updateScore(score, fallacyCount) {
+  const el = document.getElementById('scoreNum');
+  const bar = document.getElementById('scoreBar');
+  const label = document.getElementById('scoreLabel');
+  const statsScore = document.getElementById('statScore');
+
+  animateNum(el, score, 600);
+  animateNum(statsScore, score, 600);
+
+  bar.style.width = score + '%';
+  const color = score >= 70 ? 'var(--score-good)' : score >= 40 ? 'var(--score-mid)' : 'var(--score-bad)';
+  bar.style.background = color;
+  el.style.color = color;
+  statsScore.style.color = color;
+  label.textContent = score >= 80 ? 'Highly logical' : score >= 60 ? 'Mostly sound' : score >= 40 ? 'Some fallacies' : 'Heavily flawed';
+}
+
+function animateNum(el, target, duration) {
+  const start = parseInt(el.textContent) || 0;
+  const startTime = performance.now();
+  function step(now) {
+    const p = Math.min((now - startTime) / duration, 1);
+    const v = Math.round(start + (target - start) * easeOut(p));
+    el.textContent = v;
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+/* ─ Annotated Text ─ */
+function renderAnnotatedText(text, fallacies) {
+  const placeholder = document.getElementById('outputPlaceholder');
+  const output = document.getElementById('annotatedOutput');
+  placeholder.style.display = 'none';
+  output.style.display = 'block';
+
+  if (!fallacies.length) {
+    output.innerHTML = `<div style="color:var(--score-good);font-size:13px;margin-bottom:10px;">✅ No logical fallacies detected.</div><div style="color:var(--text2)">${escapeHtml(text)}</div>`;
+    return;
+  }
+
+  // Sort by position, build HTML
+  const sorted = [...fallacies].filter(f => f.start >= 0 && f.end > f.start).sort((a,b) => a.start - b.start);
+  let html = '';
+  let cursor = 0;
+
+  sorted.forEach((f, i) => {
+    if (f.start > cursor) html += escapeHtml(text.slice(cursor, f.start));
+    const fc = fallacyColor(f.name);
+    html += `<mark class="fallacy-mark" onclick="highlightCard(${i})"
+      style="background:${fc.bg};border-bottom:2px solid ${fc.color};color:inherit;cursor:pointer;"
+      title="${f.name} (${f.confidence}% confidence)"
+    >${escapeHtml(text.slice(f.start, f.end))}<sup style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${fc.color};margin-left:2px;">[${i+1}]</sup></mark>`;
+    cursor = f.end;
+  });
+  if (cursor < text.length) html += escapeHtml(text.slice(cursor));
+
+  output.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ─ Fallacy Feed ─ */
+function renderFallacyFeed(fallacies) {
+  const feed = document.getElementById('analysisFeed');
+  document.getElementById('fallacyCount').textContent = fallacies.length + ' found';
+
+  if (!fallacies.length) {
+    feed.innerHTML = `<div class="empty-feed"><div class="ef-icon">✅</div><div>No fallacies detected.<br/>Clean argument!</div></div>`;
+    return;
+  }
+
+  feed.innerHTML = fallacies.map((f, i) => {
+    const fc = fallacyColor(f.name);
+    const confColor = f.confidence >= 85 ? 'var(--score-bad)' : f.confidence >= 70 ? 'var(--score-mid)' : 'var(--text3)';
+    return `
+    <div class="fallacy-card" id="fcard-${i}" style="border-left-color:${fc.color}" onclick="toggleCard(this)">
+      <div class="fallacy-card-top">
+        <div class="fallacy-name" style="color:${fc.color}">${f.name}</div>
+        <div class="fallacy-confidence" style="color:${confColor}">${f.confidence}% conf</div>
+      </div>
+      <div class="fallacy-quote">"${(f.quote||'').substring(0,80)}…"</div>
+      <div class="expand-toggle">[${i+1}]</div>
+      <div class="collapsible">
+        <div class="fallacy-explanation">📌 ${f.explanation || ''}</div>
+        <div class="fallacy-explanation" style="margin-top:4px">⚠️ ${f.problem || ''}</div>
+        <div class="fallacy-correction">${f.correction || ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCard(el) { el.classList.toggle('expanded'); }
+function highlightCard(i) {
+  const card = document.getElementById('fcard-' + i);
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  card.classList.add('expanded');
+  card.style.outline = '2px solid var(--accent)';
+  setTimeout(() => card.style.outline = '', 2000);
+}
+
+/* ─ Argument Structure ─ */
+function renderArgumentStructure(chain) {
+  const section = document.getElementById('premiseSection');
+  const cont = document.getElementById('argumentChain');
+  if (!chain || !chain.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  cont.innerHTML = chain.map(s => `
+    <div class="arg-step">
+      <span class="arg-badge ${s.type}">${s.type}</span>
+      <span class="arg-text">${escapeHtml(s.text || '')}</span>
+    </div>
+  `).join('');
+}
+
+/* ─ Stats ─ */
+function renderStats(fallacies, text = '', score = null) {
+  document.getElementById('statTotal').textContent = fallacies.length;
+  const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+  document.getElementById('statWords').textContent = words;
+  const density = words ? ((fallacies.length / words) * 100).toFixed(1) : '0.0';
+  document.getElementById('statDensity').textContent = density + '%';
+  if (score !== null) {
+    const el = document.getElementById('statScore');
+    animateNum(el, score, 600);
+    el.style.color = score >= 70 ? 'var(--score-good)' : score >= 40 ? 'var(--score-mid)' : 'var(--score-bad)';
+  }
+
+  // Frequency
+  const freq = {};
+  fallacies.forEach(f => { freq[f.name] = (freq[f.name] || 0) + 1; });
+  const sorted = Object.entries(freq).sort((a,b) => b[1] - a[1]);
+  const max = sorted[0]?.[1] || 1;
+
+  const fc = document.getElementById('freqChart');
+  if (!sorted.length) {
+    fc.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px;">No fallacies detected.</div>';
+    return;
+  }
+  fc.innerHTML = sorted.map(([name, count]) => {
+    const c = fallacyColor(name);
+    return `<div class="freq-row">
+      <div class="freq-name">${name}</div>
+      <div class="freq-bar-wrap"><div class="freq-bar" style="width:${(count/max)*100}%;background:${c.color}"></div></div>
+      <div class="freq-count">${count}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════════════════
+   ARGUMENT MAP (Canvas)
+════════════════════════════════════════════ */
+function drawArgumentMap(structure, fallacies) {
+  const canvas = document.getElementById('mapCanvas');
+  const empty = document.getElementById('mapEmpty');
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  const ctx = canvas.getContext('2d');
+
+  if (!structure.length && !fallacies.length) {
+    canvas.style.display = 'none';
+    empty.style.display = 'flex';
+    return;
+  }
+  canvas.style.display = 'block';
+  empty.style.display = 'none';
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const isDark = !document.body.classList.contains('light');
+  const bg = isDark ? '#0a0c10' : '#f4f5f8';
+  const textColor = isDark ? '#e8edf5' : '#111827';
+  const dimText = isDark ? '#5a6478' : '#9ca3af';
+  const borderCol = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)';
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const W = canvas.width, H = canvas.height;
+  const nodes = [];
+
+  // Argument structure nodes
+  structure.forEach((s, i) => {
+    const angle = (i / Math.max(structure.length - 1, 1)) * Math.PI - Math.PI / 2;
+    const rx = W * 0.28, ry = H * 0.32;
+    const cx = W / 2 + rx * Math.cos(angle + Math.PI / 2);
+    const cy = H * 0.42 + ry * Math.sin(angle + Math.PI / 2);
+    nodes.push({ ...s, x: cx, y: cy, r: s.type === 'conclusion' ? 46 : 38 });
+  });
+
+  // Fallacy nodes around the edges
+  const fallacyNames = [...new Set(fallacies.map(f => f.name))].slice(0, 7);
+  const fallacyNodes = fallacyNames.map((name, i) => {
+    const angle = (i / Math.max(fallacyNames.length, 1)) * Math.PI * 2 - Math.PI / 4;
+    const rx = W * 0.4, ry = H * 0.38;
+    return { name, x: W / 2 + rx * Math.cos(angle), y: H * 0.45 + ry * Math.sin(angle), r: 32 };
+  });
+
+  // Draw connections
+  nodes.forEach((n, i) => {
+    if (i < nodes.length - 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = borderCol;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.moveTo(n.x, n.y);
+      ctx.lineTo(nodes[i + 1].x, nodes[i + 1].y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Connect fallacies to nearest arg node
+    fallacyNodes.forEach(fn => {
+      const closest = nodes.reduce((best, nn) => {
+        const d = Math.hypot(fn.x - nn.x, fn.y - nn.y);
+        return d < best.d ? { d, node: nn } : best;
+      }, { d: Infinity, node: null });
+      if (closest.node === n) {
+        const fc = fallacyColor(fn.name);
+        ctx.beginPath();
+        ctx.strokeStyle = fc.color + '44';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 6]);
+        ctx.moveTo(fn.x, fn.y);
+        ctx.lineTo(n.x, n.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+  });
+
+  // Draw argument nodes
+  nodes.forEach(n => {
+    const color = n.type === 'conclusion' ? '#22c55e' : n.type === 'premise' ? '#4f9cf0' : '#f59e0b';
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+    ctx.fillStyle = color + '22';
+    ctx.fill();
+    ctx.strokeStyle = color + '88';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.font = 'bold 9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(n.type.toUpperCase(), n.x, n.y - 14);
+
+    ctx.fillStyle = textColor;
+    ctx.font = '10px Outfit, sans-serif';
+    const words = (n.text || '').split(' ');
+    let line = '', y = n.y;
+    words.forEach((w, i) => {
+      const test = line + w + ' ';
+      if (ctx.measureText(test).width > n.r * 2.2 && i > 0) {
+        ctx.fillText(line.trim(), n.x, y);
+        line = w + ' '; y += 13;
+      } else line = test;
+    });
+    ctx.fillText(line.trim(), n.x, y);
+  });
+
+  // Draw fallacy nodes
+  fallacyNodes.forEach(fn => {
+    const fc = fallacyColor(fn.name);
+    ctx.beginPath();
+    ctx.arc(fn.x, fn.y, fn.r, 0, Math.PI * 2);
+    ctx.fillStyle = fc.bg;
+    ctx.fill();
+    ctx.strokeStyle = fc.color + 'aa';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = fc.color;
+    ctx.font = 'bold 10px Outfit, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const shortName = fn.name.split(' ').map((w,i) => i === 0 ? w : w[0] + '.').join(' ');
+    ctx.fillText(shortName.length > 12 ? fn.name.split(' ')[0] : shortName, fn.x, fn.y);
+    const count = fallacies.filter(f => f.name === fn.name).length;
+    if (count > 1) {
+      ctx.fillStyle = textColor;
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.fillText('×' + count, fn.x, fn.y + fn.r + 10);
+    }
+  });
+
+  // Legend
+  ctx.fillStyle = dimText;
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('⬤ Argument nodes', 16, H - 42);
+  ctx.fillText('⬤ Detected fallacies', 16, H - 26);
+}
+
+/* ════════════════════════════════════════════
+   EXPORT PDF
+════════════════════════════════════════════ */
+function exportPDF() {
+  if (!detectedFallacies.length && !document.getElementById('debateInput').value.trim()) {
+    showToast('Nothing to export yet — run analysis first'); return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+  let y = 20;
+
+  const score = parseInt(document.getElementById('scoreNum').textContent) || 0;
+  const text = document.getElementById('debateInput').value.trim();
+
+  // Header
+  doc.setFillColor(10,12,16); doc.rect(0,0,W,30,'F');
+  doc.setTextColor(79,156,240);
+  doc.setFontSize(22); doc.setFont('helvetica','bold');
+  doc.text('FallacyScope', 14, 16);
+  doc.setFontSize(9); doc.setFont('helvetica','normal');
+  doc.setTextColor(154,163,181);
+  doc.text('AI DEBATE FALLACY ANALYSIS REPORT', 14, 23);
+  doc.text(new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}), W-14, 23, {align:'right'});
+
+  y = 40;
+  // Score box
+  doc.setFillColor(26,31,42); doc.roundedRect(12, y, W-24, 22, 3, 3, 'F');
+  doc.setTextColor(score >= 70 ? 34 : score >= 40 ? 245 : 239, score >= 70 ? 197 : score >= 40 ? 158 : 68, score >= 70 ? 94 : score >= 40 ? 11 : 68);
+  doc.setFontSize(28); doc.setFont('helvetica','bold');
+  doc.text(score + '', W/2, y+15, {align:'center'});
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(154,163,181);
+  doc.text('LOGIC INTEGRITY SCORE', W/2, y+20, {align:'center'});
+  y += 32;
+
+  // Stats row
+  doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(79,156,240);
+  doc.text(`${detectedFallacies.length} FALLACIES DETECTED`, 14, y);
+  doc.text(`${text.split(/\s+/).length} WORDS ANALYZED`, W/2, y, {align:'center'});
+  doc.setTextColor(154,163,181);
+  doc.text(new Date().toLocaleTimeString(), W-14, y, {align:'right'});
+  y += 10;
+
+  // Original text excerpt
+  doc.setFillColor(20,24,32); doc.roundedRect(12, y, W-24, 4, 2, 2, 'F');
+  y += 8;
+  doc.setFontSize(8); doc.setTextColor(154,163,181); doc.setFont('helvetica','italic');
+  const excerpt = text.substring(0,280) + (text.length > 280 ? '…' : '');
+  const lines = doc.splitTextToSize(excerpt, W-28);
+  doc.text(lines.slice(0,5), 14, y);
+  y += Math.min(lines.slice(0,5).length, 5) * 4 + 8;
+
+  // Fallacies
+  doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(232,237,245);
+  doc.text('DETECTED FALLACIES', 14, y); y += 8;
+
+  detectedFallacies.forEach((f, i) => {
+    if (y > 250) { doc.addPage(); y = 20; }
+    const fc = FALLACY_COLORS[f.name] || { color: '#6b7280' };
+    const hex = fc.color.replace('#','');
+    const r = parseInt(hex.substr(0,2),16), g = parseInt(hex.substr(2,2),16), b = parseInt(hex.substr(4,2),16);
+    doc.setFillColor(26,31,42); doc.roundedRect(12, y, W-24, 38, 3, 3, 'F');
+    doc.setDrawColor(r,g,b); doc.setLineWidth(0.8); doc.line(12, y+3, 12, y+35);
+    doc.setFontSize(10); doc.setFont('helvetica','bold'); doc.setTextColor(r,g,b);
+    doc.text(`[${i+1}] ${f.name}`, 17, y+7);
+    doc.setFontSize(7); doc.setFont('helvetica','normal'); doc.setTextColor(154,163,181);
+    doc.text(`${f.confidence}% confidence`, W-16, y+7, {align:'right'});
+    doc.setTextColor(154,163,181); doc.setFontSize(7); doc.setFont('helvetica','italic');
+    const q = doc.splitTextToSize(`"${(f.quote||'').substring(0,100)}"`, W-35);
+    doc.text(q, 17, y+13);
+    doc.setFont('helvetica','normal'); doc.setTextColor(200,206,218);
+    const exp = doc.splitTextToSize(f.explanation || '', W-35);
+    doc.text(exp.slice(0,2), 17, y+20);
+    doc.setTextColor(79,156,240);
+    const cor = doc.splitTextToSize('💡 ' + (f.correction || ''), W-35);
+    doc.text(cor.slice(0,2), 17, y+29);
+    y += 44;
+  });
+
+  if (!detectedFallacies.length) {
+    doc.setTextColor(34,197,94); doc.setFontSize(12); doc.setFont('helvetica','bold');
+    doc.text('✓ No logical fallacies detected — clean argument!', 14, y);
+    y += 14;
+  }
+
+  doc.save(`FallacyScope_Report_${Date.now()}.pdf`);
+  showToast('📄 PDF exported!');
+}
+
+/* ════════════════════════════════════════════
+   UI HELPERS
+════════════════════════════════════════════ */
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
+  if (name === 'map' && detectedFallacies.length) drawArgumentMap(argumentStructure, detectedFallacies);
+}
+
+function toggleReference() {
+  const body = document.getElementById('referenceBody');
+  const ch = document.getElementById('refChevron');
+  body.classList.toggle('open');
+  ch.textContent = body.classList.contains('open') ? '▲' : '▼';
+}
+
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  if (detectedFallacies.length) drawArgumentMap(argumentStructure, detectedFallacies);
+}
+
+function clearAll() {
+  document.getElementById('debateInput').value = '';
+  document.getElementById('charCount').textContent = '0 chars';
+  document.getElementById('annotatedOutput').style.display = 'none';
+  document.getElementById('outputPlaceholder').style.display = 'flex';
+  document.getElementById('premiseSection').style.display = 'none';
+  document.getElementById('analysisFeed').innerHTML = `<div class="empty-feed"><div class="ef-icon">📋</div><div>No fallacies detected yet.<br/>Paste text and run analysis.</div></div>`;
+  document.getElementById('fallacyCount').textContent = '0 found';
+  document.getElementById('scoreNum').textContent = '—';
+  document.getElementById('scoreNum').style.color = 'var(--text3)';
+  document.getElementById('scoreLabel').textContent = 'awaiting analysis';
+  document.getElementById('scoreBar').style.width = '0%';
+  detectedFallacies = [];
+  renderStats([], '', null);
+  const canvas = document.getElementById('mapCanvas');
+  canvas.style.display = 'none';
+  document.getElementById('mapEmpty').style.display = 'flex';
+  showToast('Cleared');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ─ Resize handle ─ */
+function setupResizeHandle() {
+  const handle = document.getElementById('resizeHandle');
+  const body = document.querySelector('.editor-body');
+  let dragging = false, startY = 0, startFr = 50;
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY;
+    const rows = getComputedStyle(body).gridTemplateRows.split(' ');
+    startFr = parseFloat(rows[0]) / (parseFloat(rows[0]) + parseFloat(rows[2])) * 100;
+    document.body.style.userSelect = 'none';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const totalH = body.clientHeight;
+    const delta = ((e.clientY - startY) / totalH) * 100;
+    const newTop = Math.max(20, Math.min(80, startFr + delta));
+    body.style.gridTemplateRows = `${newTop}fr 2px ${100 - newTop}fr`;
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    document.body.style.userSelect = '';
+  });
+}
+
+window.addEventListener('resize', () => {
+  if (detectedFallacies.length) drawArgumentMap(argumentStructure, detectedFallacies);
+});
+</script>
+</body>
+</html>
